@@ -1,8 +1,9 @@
-gradio==5.11.0
+chainlit==2.0.2
 langchain==0.3.14
+langchain_community==0.3.14
 langchain_core==0.3.29
-langchain_openai==0.2.14
-langgraph==0.2.61
+langchain_openai==0.3.0
+langgraph==0.2.62
 matplotlib==3.10.0
 pandas==2.2.3
 pydantic==2.10.5
