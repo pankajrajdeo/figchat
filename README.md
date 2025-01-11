@@ -51,10 +51,10 @@ Ensure you have a `.env` file configured with the correct paths and API key:
 
 ```dotenv
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-BASE_DATASET_DIR=/path/datasets
-PLOT_OUTPUT_DIR=/path/plots
-DATASET_INDEX_FILE=/path/dataset_index_advanced_paths.tsv
-DATABASE_PATH=/path/global_sqlite.db
+BASE_DATASET_DIR=/path_to_datasets_directory/datasets
+PLOT_OUTPUT_DIR=/path_to_plots_directory/plots
+DATASET_INDEX_FILE=/path_to_datasets_directory/datasets/dataset_index_advanced_paths.tsv
+DATABASE_PATH=/path_to_database_directory/database/global_sqlite.db
 ```
 
 ---
