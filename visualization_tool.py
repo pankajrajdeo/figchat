@@ -194,7 +194,7 @@ def parse_and_execute(output: str) -> str:
     and returns a JSON object with the plot output paths and plot types.
     """
     try:
-        BASE_URL = "http://devapp.lungmap.net"
+        BASE_URL = "https://devapp.lungmap.net"
         data = json.loads(output)
         plot_outputs = []
 
