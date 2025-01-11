@@ -1,11 +1,12 @@
+#chainlit_app.py
 import os
 import warnings
 import uuid
 from dotenv import load_dotenv
-import pandas as pd
-import chainlit as cl
 import sqlite3
+import chainlit as cl
 
+from utils import parse_tsv_data
 from langchain_openai import ChatOpenAI
 from langgraph.graph import MessagesState, START, StateGraph
 from langgraph.prebuilt import tools_condition, ToolNode
@@ -25,21 +26,15 @@ PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
 DATASET_INDEX_FILE = os.getenv("DATASET_INDEX_FILE")
 DATABASE_PATH = os.getenv("DATABASE_PATH")
 
-# Preload datasets
+# Preload datasets and connect to the database
 PRELOADED_DATA = {}
 PRELOADED_DATASET_INDEX = None
-
-# Database connection
 conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
 
-def preload_dataset_index(file_path: str):
-    global PRELOADED_DATASET_INDEX
-    try:
-        PRELOADED_DATASET_INDEX = pd.read_csv(file_path, sep='\t')
-    except Exception as e:
-        print(f"Failed to preload dataset index: {e}")
-
 def preload_all_h5ad_files(base_dir: str):
+    """
+    Preloads all .h5ad files from the specified base directory into memory.
+    """
     global PRELOADED_DATA
     for subdir in os.listdir(base_dir):
         subdir_path = os.path.join(base_dir, subdir)
@@ -55,7 +50,13 @@ def preload_all_h5ad_files(base_dir: str):
                     except Exception as e:
                         print(f"Failed to load {fullpath}: {e}")
 
-preload_dataset_index(DATASET_INDEX_FILE)
+# Preload dataset index using the new parse_tsv_data logic
+try:
+    PRELOADED_DATASET_INDEX = parse_tsv_data(DATASET_INDEX_FILE)
+except Exception as e:
+    print(f"Error loading dataset index: {e}")
+
+# Preload all .h5ad files
 preload_all_h5ad_files(BASE_DATASET_DIR)
 
 # Import and configure tools
@@ -63,6 +64,7 @@ import visualization_tool
 import dataset_info_tool
 import internet_search_tool
 
+# Pass the preloaded data to the tools
 visualization_tool.PRELOADED_DATA = PRELOADED_DATA
 visualization_tool.PRELOADED_DATASET_INDEX = PRELOADED_DATASET_INDEX
 visualization_tool.PLOT_OUTPUT_DIR = PLOT_OUTPUT_DIR
@@ -96,30 +98,9 @@ sys_msg = SystemMessage(content="""You are LungMAP scExplore, an assistant to ex
    - File Name: `BPD_fetal_normalized_log_deg.h5ad`
 
 ### Tools Available:
-- **visualization_tool**:
-  - Use this tool to generate UMAP Cluster plots based on the user’s query. You can specify the dataset and choose the observation column for coloring the plot, (e.g. "cell_type" or "disease"). If the specified column is not available for the chosen dataset, inform the user and offer the option to generate the UMAP colored by another available column.
-- **dataset_info_tool**:
-  - Use this tool to provide detailed metadata and information about the datasets listed above.
-- **internet_search_tool**:
-  - Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
-
-### Future Capabilities:
-In future releases, you will be able to generate the following plot types:
-- Heatmap
-- Radar Plot
-- Cell Frequency Boxplot
-- Volcano Plot
-- Dot Plot
-- Violin Plot
-- UMAP Gene Expression
-- Venn Diagram
-- UpSet Plot
-- Gene Interaction Network
-
-### Guidelines for Use:
-- If the user query involves generating a UMAP Cluster plot, you should use the **visualization_tool**.
-- If the user asks for information about a dataset, you should use the **dataset_info_tool**.
-- If the query cannot be answered using the above tools or relates to external knowledge, use the **internet_search_tool**.
+- **visualization_tool**: Use this tool to generate UMAP Cluster plots based on the user’s query. You can specify the dataset and choose the observation column for coloring the plot, (e.g. "cell_type" or "disease"). If the specified column is not available for the chosen dataset, inform the user and offer the option to generate the UMAP colored by another available column.
+- **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets listed above.
+- **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 
 Always strive to understand the user’s intent and provide accurate and context-appropriate responses based on the tools and datasets at your disposal.""")
 
@@ -187,4 +168,3 @@ async def on_message(message: cl.Message):
     # Send final response to the user
     if responses:
         await cl.Message(content=responses[-1]).send()
-        
