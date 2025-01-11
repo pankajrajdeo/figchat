@@ -1,4 +1,3 @@
-# visualization_tool.py
 import os
 import uuid
 import scanpy as sc
@@ -10,6 +9,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 import json
 import base64
+from utils import parse_tsv_data
 
 # Placeholders for globals to be set externally
 PRELOADED_DATA = {}
@@ -68,19 +68,21 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(format_instructions=parser.get_format_instructions())
 
-def load_dataset_index_as_string() -> str:
+def get_dataset_metadata() -> str:
     """
-    Return the preloaded dataset index as a string.
+    Retrieve the dataset metadata as a structured string for use in prompts.
+
+    Returns:
+    - str: Dataset metadata in JSON format.
     """
     if PRELOADED_DATASET_INDEX is None:
         raise RuntimeError("Dataset index is not preloaded into memory.")
-    
-    return PRELOADED_DATASET_INDEX.to_string(index=False)
+    return json.dumps(PRELOADED_DATASET_INDEX, indent=4)
 
 def generate_image_description(image_path: str) -> str:
     """
     Generates a description of the image using a multimodal input query.
-    
+
     Parameters:
     - image_path: Path to the image file.
 
@@ -174,12 +176,12 @@ def visualization_tool(user_query: str) -> str:
     and returns the output plot paths in JSON format.
     """
     try:
-        dataset_metadata_str = load_dataset_index_as_string()
+        dataset_metadata = get_dataset_metadata()
         model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
         chain = prompt | model | parser
         result: DatasetResults = chain.invoke({
             "user_query": user_query,
-            "dataset_metadata": dataset_metadata_str
+            "dataset_metadata": dataset_metadata
         })
         raw_output = json.dumps(result.model_dump(), indent=4)
         return parse_and_execute(raw_output)
