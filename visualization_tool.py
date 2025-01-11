@@ -101,7 +101,7 @@ Use clear and concise language, appropriate for computational biologists, to exp
         ]
     )
 
-    model = ChatOpenAI(model="gpt-4o")
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
     response = model.invoke([message])
     return response.content
 
@@ -194,6 +194,7 @@ def parse_and_execute(output: str) -> str:
     and returns a JSON object with the plot output paths and plot types.
     """
     try:
+        BASE_URL = "http://devapp.lungmap.net"
         data = json.loads(output)
         plot_outputs = []
 
@@ -206,11 +207,15 @@ def parse_and_execute(output: str) -> str:
             if plot_type == "umap":
                 try:
                     plot_paths = plot_umap(dataset_path, h5ad_file, color_by)
+                    
+                    # Generate image description with original local path
                     image_description = generate_image_description(plot_paths["png_path"])
+                    
+                    # Prepend BASE_URL to plot paths for JSON output
                     plot_outputs.append({
                         "plot_type": "UMAP",
-                        "pdf_path": plot_paths["pdf_path"],
-                        "png_path": plot_paths["png_path"],
+                        "pdf_path": f"{BASE_URL}{plot_paths['pdf_path']}" if plot_paths.get("pdf_path") else None,
+                        "png_path": f"{BASE_URL}{plot_paths['png_path']}" if plot_paths.get("png_path") else None,
                         "image_description": image_description
                     })
                 except RuntimeError as e:
