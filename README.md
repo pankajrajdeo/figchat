@@ -51,10 +51,10 @@ Ensure you have a `.env` file configured with the correct paths and API key:
 
 ```dotenv
 OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
-BASE_DATASET_DIR=/data/aronow/pankaj/FigChat/datasets
-PLOT_OUTPUT_DIR=/data/aronow/pankaj/FigChat/run_code/plots
-DATASET_INDEX_FILE=/data/aronow/pankaj/FigChat/datasets/dataset_index_advanced_paths.tsv
-DATABASE_PATH=/data/aronow/pankaj/FigChat/database/global_sqlite.db
+BASE_DATASET_DIR=/path/datasets
+PLOT_OUTPUT_DIR=/path/plots
+DATASET_INDEX_FILE=/path/dataset_index_advanced_paths.tsv
+DATABASE_PATH=/path/global_sqlite.db
 ```
 
 ---
@@ -76,18 +76,19 @@ pip install -r requirements.txt
     ```bash
     cd /path/to/LungMAP_scExplore
     ```
+2. !mkdir -p database && [ ! -f database/global_sqlite.db ] && wget -O database/global_sqlite.db https://github.com/langchain-ai/langchain-academy/raw/main/module-2/state_db/example.db
 
-2. Set up the `.env` file with your paths and API key.
-
-3. Ensure you are connected to the necessary network and have proxy settings configured if required.
-
-4. Run the Gradio application:
+3. Set up the `.env` file with your paths and API key.
+  
+5. Ensure you are connected to the necessary network and have proxy settings configured if required.
+   
+5. Run the Gradio application:
 
     ```bash
     python figchat_gradio.py
     ```
 
-5. Open the provided Gradio link in your browser to interact with LungMAP scExplore.
+7. Open the provided Gradio link in your browser to interact with LungMAP scExplore.
 
 ### Chainlit Interface
 1. Follow steps 1–3 above for setup.
