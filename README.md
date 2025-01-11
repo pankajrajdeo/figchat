@@ -11,7 +11,7 @@
 - **Main Script:** `chainlit_app.py`
   - Sets up a Chainlit-based conversational interface.
   - Uses a state graph with LangGraph to manage conversation flow and tool invocation.
-  - Provides similar functionalities as the Gradio interface with conversational state persistence.
+  - Provides a chat interface with conversational state persistence.
 
 ### Documentation and Information
 - **User Guide:** `chainlit.md`
