@@ -1,17 +1,11 @@
 # LungMAP scExplore
 
 ## Overview
-**LungMAP scExplore** is an advanced application for exploring and visualizing scRNA-seq datasets from LungMAP. It leverages conversational AI to provide interactive dataset exploration and visualization capabilities. Users can interact with the assistant via multiple interfaces, including a Gradio-based chatbot and a Chainlit-powered chat application. The system integrates various tools for dataset metadata retrieval, UMAP plot generation, and internet searches, all powered by OpenAI's GPT-based models.
+**LungMAP scExplore** is an advanced application for exploring and visualizing scRNA-seq datasets from LungMAP. It leverages conversational AI to provide interactive dataset exploration and visualization capabilities. Users can interact with the assistant via a Chainlit-powered chat application. The system integrates various tools for dataset metadata retrieval, UMAP plot generation, and internet searches, all powered by OpenAI's GPT-based models.
 
 ---
 
 ## Main Interfaces and Files
-
-### Gradio Chat Interface
-- **Main Script:** `figchat_gradio.py`
-  - Launches a Gradio-based chatbot interface for user interaction.
-  - Loads environment variables, preloads datasets, and integrates key tools for exploration and visualization.
-  - Allows users to query dataset information and generate visualizations like UMAP plots.
 
 ### Chainlit Chat Interface
 - **Main Script:** `chainlit_app.py`
@@ -68,9 +62,7 @@ pip install -r requirements.txt
 
 ---
 
-## How to Run
-
-### Gradio Interface
+## How to Run Chainlit Interface
 1. Clone the repository and navigate to the project directory:
 
     ```bash
@@ -81,27 +73,14 @@ pip install -r requirements.txt
     mkdir -p database && [ ! -f database/global_sqlite.db ] && wget -O database/global_sqlite.db https://github.com/langchain-ai/langchain-academy/raw/main/module-2/state_db/example.db
     ```
 3. Set up the `.env` file with your paths and API key.
-  
-4. Ensure you are connected to the necessary network and have proxy settings configured if required.
-   
-5. Run the Gradio application:
 
-    ```bash
-    python figchat_gradio.py
-    ```
-
-7. Open the provided Gradio link in your browser to interact with LungMAP scExplore.
-
-### Chainlit Interface
-1. Follow steps 1–3 above for setup.
-
-2. Run the Chainlit application:
+4. Run the Chainlit application:
 
     ```bash
     chainlit run chainlit_app.py
     ```
 
-3. Follow the on-screen instructions to start chatting with LungMAP scExplore via the Chainlit interface.
+5. Follow the on-screen instructions to start chatting with LungMAP scExplore via the Chainlit interface.
 
 ---
 
