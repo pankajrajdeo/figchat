@@ -76,11 +76,13 @@ pip install -r requirements.txt
     ```bash
     cd /path/to/LungMAP_scExplore
     ```
-2. !mkdir -p database && [ ! -f database/global_sqlite.db ] && wget -O database/global_sqlite.db https://github.com/langchain-ai/langchain-academy/raw/main/module-2/state_db/example.db
-
+2. Pull a sqlite file:
+    ```bash
+    mkdir -p database && [ ! -f database/global_sqlite.db ] && wget -O database/global_sqlite.db https://github.com/langchain-ai/langchain-academy/raw/main/module-2/state_db/example.db
+    ```
 3. Set up the `.env` file with your paths and API key.
   
-5. Ensure you are connected to the necessary network and have proxy settings configured if required.
+4. Ensure you are connected to the necessary network and have proxy settings configured if required.
    
 5. Run the Gradio application:
 
