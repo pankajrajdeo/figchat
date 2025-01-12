@@ -19,6 +19,9 @@
   - Serves as a welcome page and documentation for researchers using the Chainlit interface.
 
 ### Tools and Utilities
+- **`utils.py`**
+  - Provides the `parse_tsv` refactoring function to `dataset_info_tool.py` and `visualization_tool.py`.
+    
 - **`dataset_info_tool.py`**
   - Provides detailed metadata about available LungMAP datasets.
   - Parses dataset index files to return structured JSON with dataset descriptions, species, research teams, and more.
