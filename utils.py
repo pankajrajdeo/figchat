@@ -137,6 +137,10 @@ def parse_tsv_data(file_path):
         h5ad_name = row['h5ad']
         anndata_structure = anndata_structures.get(h5ad_name, {})
 
+        # Safely parse restrict_index and display_index
+        restrict_index = row['restrict_index'] if pd.notna(row['restrict_index']) else ""
+        display_index = row['display_index'] if pd.notna(row['display_index']) else ""
+
         # Build structured dataset entry
         datasets.append({
             "**Dataset Metadata**": {
@@ -162,12 +166,14 @@ def parse_tsv_data(file_path):
             },
             "**Dataset-Specific Fields**": {
                 "**Disease Stats**": row['disease_stats'],
-                "**Restrict Index** ": row['restrict_index'],
-                "**Display Index**": row['display_index']
+                "**Restrict Index**": [val.strip() for val in restrict_index.split(',') if val.strip()],
+                "**Display Index**": [val.strip() for val in display_index.split(',') if val.strip()]
             },
             "**Differential Expression** (Disease-Study-CellType mappings)": parse_deg_field(row['Disease-Study-CellType-DEGs']),
+            "**Directory Path** (File location of the dataset)": row['directory_path'],
             "**AnnData Structure**": anndata_structure
         })
+
 
     # Add notes section at the bottom
     notes = {
@@ -176,7 +182,8 @@ def parse_tsv_data(file_path):
             "2. **Indexes and Annotations**: Metadata fields that organize and describe aspects of the dataset such as cell types, covariates, age, sex, studies, assays, tissues, and sampling methods.",
             "3. **Dataset-Specific Fields**: Includes disease statistics, restrict index for filtering, and display index for visualization preferences.",
             "4. **Differential Expression**: Information linking diseases, associated studies, and cell types involved in differential expression analysis.",
-            "5. **AnnData Structure**: Structure of the AnnData object for the dataset."
+            "5. **Directory Path**: The file location where the dataset is stored.",
+            "6. **AnnData Structure**: Structure of the AnnData object for the dataset."
         ]
     }
 
