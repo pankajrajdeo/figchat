@@ -170,6 +170,7 @@ def parse_tsv_data(file_path):
                 "**Display Index**": [val.strip() for val in display_index.split(',') if val.strip()]
             },
             "**Differential Expression** (Disease-Study-CellType mappings)": parse_deg_field(row['Disease-Study-CellType-DEGs']),
+            "**Directory Path** (File location of the dataset)": row['directory_path'],
             "**AnnData Structure**": anndata_structure
         })
 
@@ -181,7 +182,8 @@ def parse_tsv_data(file_path):
             "2. **Indexes and Annotations**: Metadata fields that organize and describe aspects of the dataset such as cell types, covariates, age, sex, studies, assays, tissues, and sampling methods.",
             "3. **Dataset-Specific Fields**: Includes disease statistics, restrict index for filtering, and display index for visualization preferences.",
             "4. **Differential Expression**: Information linking diseases, associated studies, and cell types involved in differential expression analysis.",
-            "5. **AnnData Structure**: Structure of the AnnData object for the dataset."
+            "5. **Directory Path**: The file location where the dataset is stored.",
+            "6. **AnnData Structure**: Structure of the AnnData object for the dataset."
         ]
     }
 
