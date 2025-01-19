@@ -4,7 +4,8 @@ from utils import parse_tsv_data  # Import the shared parsing utility
 
 def dataset_info_tool() -> str:
     """
-    Provides structured and detailed metadata information about all the h5ad datasets we are working with.
+    Provides structured and detailed metadata information about all the h5ad datasets we are working with,
+    excluding the directory path from the output.
     """
     from visualization_tool import PRELOADED_DATASET_INDEX  # Use the preloaded dataset index
 
@@ -19,9 +20,15 @@ def dataset_info_tool() -> str:
         datasets = parsed_data.get("datasets", [])
         notes = parsed_data.get("notes", {})
 
+        # Remove the `**Directory Path**` field from each dataset
+        for dataset in datasets:
+            if "**Directory Path** (File location of the dataset)" in dataset:
+                del dataset["**Directory Path** (File location of the dataset)"]
+
         # Return the structured JSON as a string
         return json.dumps({"datasets": datasets, "notes": notes}, indent=4)
 
     except Exception as e:
         return f"Error retrieving dataset information: {repr(e)}"
+
 
