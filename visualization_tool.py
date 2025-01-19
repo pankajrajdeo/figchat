@@ -13,6 +13,7 @@ import matplotlib
 import logging
 from matplotlib import rcParams
 from figure_generation import main
+import pandas as pd
 
 BASE_URL = "https://devapp.lungmap.net"
 
@@ -160,7 +161,12 @@ def get_dataset_metadata() -> str:
     global PRELOADED_DATASET_INDEX, DATASET_INDEX_FILE
     if PRELOADED_DATASET_INDEX is None:
         PRELOADED_DATASET_INDEX = parse_tsv_data(DATASET_INDEX_FILE)
-    return json.dumps(PRELOADED_DATASET_INDEX, indent=4)
+    # Check if it's a DataFrame and convert if necessary
+    if isinstance(PRELOADED_DATASET_INDEX, pd.DataFrame):
+        data_to_dump = PRELOADED_DATASET_INDEX.to_dict(orient='list')
+    else:
+        data_to_dump = PRELOADED_DATASET_INDEX
+    return json.dumps(data_to_dump, indent=4)
 
 def run_workflow1(user_query: str) -> Workflow1Model:
     dataset_metadata_str = get_dataset_metadata()
