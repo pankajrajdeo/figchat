@@ -1,3 +1,4 @@
+#figure_generation.py
 from preload_datasets import PRELOADED_DATA
 import scanpy as sc
 import matplotlib.pyplot as plt
