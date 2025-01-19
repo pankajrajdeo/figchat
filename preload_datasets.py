@@ -1,8 +1,10 @@
+#preload_datasets.py
 import scanpy as sc
 import pandas as pd
 import sqlite3
 import os
 from dotenv import load_dotenv
+from utils import parse_tsv_data
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -22,8 +24,9 @@ DATABASE_PATH = os.getenv("DATABASE_PATH")
 def preload_dataset_index(file_path: str):
     global PRELOADED_DATASET_INDEX
     try:
-        PRELOADED_DATASET_INDEX = pd.read_csv(file_path, sep='\t')
-        print("Dataset index successfully preloaded into memory.")
+        # Use the parse_tsv_data function to get a JSON-serializable dict
+        PRELOADED_DATASET_INDEX = parse_tsv_data(file_path)
+        print("Dataset index successfully preloaded into memory as a serializable object.")
     except Exception as e:
         print(f"Error preloading dataset index: {e}")
 
