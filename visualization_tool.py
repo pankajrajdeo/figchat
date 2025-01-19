@@ -1,84 +1,395 @@
+# visualization_tool.py
 import os
-import uuid
-import scanpy as sc
-import matplotlib.pyplot as plt
-from typing import Dict, Any, List
-from pydantic import BaseModel, Field
+import json
+import base64
+from typing import Literal, Optional
+from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-import json
-import base64
 from utils import parse_tsv_data
+from preload_datasets import PLOT_OUTPUT_DIR
+import matplotlib
+import logging
+from matplotlib import rcParams
+from figure_generation import main
 
-# Placeholders for globals to be set externally
-PRELOADED_DATA = {}
-PRELOADED_DATASET_INDEX = None
-PLOT_OUTPUT_DIR = None
+BASE_URL = "https://devapp.lungmap.net"
 
-# Pydantic Models for Dataset Results
-class DatasetResult(BaseModel):
-    dataset_path: str = Field(..., description="Path to the dataset directory")
-    h5ad_file: str = Field(..., description="Name of the .h5ad file")
-    plot_type: str = Field(..., description="Type of plot requested")
-    color_by: str = Field("cell_type", description="Observation column to color the plot")
-    additional_args: Dict[str, Any] = Field({}, description="Additional arguments for the plot")
+# Suppress font-related messages
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
-class DatasetResults(BaseModel):
-    results: List[DatasetResult]
+# Set a default font family to avoid Arial warnings
+rcParams['font.family'] = 'DejaVu Sans'
 
-# Output parser
-parser = PydanticOutputParser(pydantic_object=DatasetResults)
+# -----------------------------
+# Workflow 1: Dataset & Plot Selection
+# -----------------------------
 
-# Prompt Template for Dataset Routing
-PROMPT_TEMPLATE = """\
-You are a dataset router and plot configuration assistant. Based on the user's query, identify the most relevant dataset(s) and parse the required arguments for the requested plot type.
+class Workflow1Model(BaseModel):
+    dataset_name: Optional[Literal[
+        "HLCA_full_superadata_v3_norm_log_deg.h5ad",
+        "HCA_fetal_lung_normalized_log_deg.h5ad",
+        "BPD_infant_Sun_normalized_log_deg.h5ad",
+        "BPD_fetal_normalized_log_deg.h5ad"
+    ]]
+    reason: str
+    plot_type: Literal[
+        "heatmap", "radar", "cell_frequency", "volcano", "stats",
+        "dotplot", "violin", "venn", "upset_genes", "umap", "network"
+    ]
+
+workflow1_parser = PydanticOutputParser(pydantic_object=Workflow1Model)
+
+WORKFLOW1_PROMPT_TEMPLATE = """\
+Based on the user's query and the available dataset metadata, perform the following tasks:
+
+1. **Dataset Selection:**
+   - Select the most relevant dataset from the available options.
+
+2. **Plot Type Selection:**
+   - Determine the most suitable plot type for visualizing the data in the context of the user's query.
+   - Use the following plot type guidelines to assist your selection:
+
+    1. **heatmap**
+       - Shows expression levels (e.g., top genes, marker genes) across cells or aggregated cell groups.
+       - Use for visualizing patterns/clusters or comparing expression intensities across multiple genes and/or cell types.
+
+    2. **radar**
+       - Displays average cell-type frequencies (proportions) across different conditions in a radial/spider chart.
+       - Best for a concise overview of composition changes (e.g., “How do cell types differ by disease?”).
+
+    3. **cell_frequency**
+       - Shows per-donor box/violin plots of cell-type frequencies with statistical tests (e.g., Mann-Whitney U).
+       - Useful for detailed donor-level comparisons or p-values for differences in cell-type proportions by condition.
+
+    4. **volcano**
+       - A scatter plot of Log2(Fold Change) vs. -log10(p-value) to highlight significantly changed genes.
+       - Use to visualize genes up/down-regulated in a comparison.
+
+    5. **dotplot**
+       - Compares multiple genes across groups/cell types.
+       - Dot size reflects the fraction of cells expressing the gene; color reflects average expression.
+       - Ideal for a quick overview of how specific genes are expressed across cell types/conditions.
+
+    6. **violin**
+       - Displays the distribution of expression for a single gene across conditions or groups.
+       - Useful for focusing on one gene and its distribution.
+
+    7. **venn**
+       - Compares overlapping genes (e.g., shared DEGs) among up to 2-3 sets.
+       - Relevant for explicitly requested overlapping gene sets.
+
+    8. **upset_genes**
+       - Compares overlaps among >2 gene sets or more complex intersections.
+       - Similar to Venn but handles multiple groups more clearly.
+
+    9. **umap**
+       - Plots all cells in a 2D UMAP embedding, colored by cell type/cluster or expression of a single gene.
+       - Use for an overview of cell clusters or spatial distribution of one gene across the manifold.
+
+    10. **network**
+        - Displays gene interaction or regulatory networks.
+        - Use for requests involving “key transcriptional regulators,” “gene-gene interactions,” or regulatory relationships.
+
+    11. **stats**
+        - Outputs a TSV file summarizing differentially expressed genes (DEGs) for the specified condition, cell type, or disease.
+        - Includes details like gene names, p-values, log fold changes, and associated metadata.
+        - Use when the user requires a structured summary of DEGs for downstream analysis or validation.
 
 Dataset Metadata:
 {dataset_metadata}
 
-Each dataset includes:
-- Name
-- Description
-- Directory Path
-- h5ad File Name
-- Cell Types
-- Conditions/Diseases
-- Assay Types
-- Other metadata fields
+User Query:
+{user_query}
 
-For each matching dataset, return:
-- `dataset_path`: Directory where the dataset resides
-- `h5ad_file`: Name of the dataset file
-- `plot_type`: The type of plot to generate (e.g., UMAP, heatmap, violin plot)
-- `color_by`: The observation column to color the plot (default is "cell_type")
-- `additional_args`: Any additional arguments required for the plot (default is an empty dictionary)
-
-Respond with a JSON matching the schema:
+Your output should be a single JSON object adhering to this schema:
 {format_instructions}
-
-User Query: {user_query}
 """
 
-# Prepare the prompt
-prompt = ChatPromptTemplate.from_messages(
+workflow1_prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", PROMPT_TEMPLATE),
+        ("system", WORKFLOW1_PROMPT_TEMPLATE),
         ("human", "{user_query}")
     ]
-).partial(format_instructions=parser.get_format_instructions())
+).partial(format_instructions=workflow1_parser.get_format_instructions())
+
+# -----------------------------
+# Workflow 2: DEG Existence Confirmation
+# -----------------------------
+
+class DEGCheckModel(BaseModel):
+    deg_existence: bool
+    suggestion: Optional[str]
+
+degcheck_parser = PydanticOutputParser(pydantic_object=DEGCheckModel)
+
+DEG_CHECK_PROMPT_TEMPLATE = """\
+You are an assistant specialized in confirming the existence of differentially expressed genes (DEGs) given a dataset's DEG metadata.
+
+Dataset Name: {dataset_name}
+Differential Expression Metadata:
+{deg_metadata}
+
+User Query:
+{user_query}
+
+Based on the DEG metadata, determine if DEGs exist for the specified disease and cell type combination in the user query. 
+If DEGs exist, output:
+- "deg_existence": true
+Otherwise, output:
+- "deg_existence": false
+Include any suggestions or alternative options if DEGs do not exist.
+
+Your output should be a JSON object adhering to this schema:
+{format_instructions}
+"""
+
+deg_check_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", DEG_CHECK_PROMPT_TEMPLATE),
+        ("human", "{user_query}")
+    ]
+).partial(format_instructions=degcheck_parser.get_format_instructions())
+
+# Utility
+PRELOADED_DATASET_INDEX = None
+from preload_datasets import DATASET_INDEX_FILE
 
 def get_dataset_metadata() -> str:
-    """
-    Retrieve the dataset metadata as a structured string for use in prompts.
-
-    Returns:
-    - str: Dataset metadata in JSON format.
-    """
+    global PRELOADED_DATASET_INDEX, DATASET_INDEX_FILE
     if PRELOADED_DATASET_INDEX is None:
-        raise RuntimeError("Dataset index is not preloaded into memory.")
+        PRELOADED_DATASET_INDEX = parse_tsv_data(DATASET_INDEX_FILE)
     return json.dumps(PRELOADED_DATASET_INDEX, indent=4)
 
+def run_workflow1(user_query: str) -> Workflow1Model:
+    dataset_metadata_str = get_dataset_metadata()
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    chain = workflow1_prompt | model | workflow1_parser
+    result: Workflow1Model = chain.invoke({
+        "user_query": user_query,
+        "dataset_metadata": dataset_metadata_str
+    })
+    return result
+
+def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: str) -> DEGCheckModel:
+    # Parse metadata to extract DEG information for the selected dataset
+    all_metadata = json.loads(dataset_metadata_str)
+    deg_metadata = "[]"
+    alt_degs = []
+    for ds in all_metadata.get("datasets", []):
+        ds_name = ds.get("**Dataset Metadata**", {}).get("**Dataset Name**")
+        if ds_name == selected_dataset:
+            deg_info = ds.get("**Differential Expression** (Disease-Study-CellType mappings)", [])
+            deg_metadata = json.dumps(deg_info, indent=2)
+            alt_degs = deg_info
+            break
+
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    chain = deg_check_prompt | model | degcheck_parser
+    result: DEGCheckModel = chain.invoke({
+        "user_query": user_query,
+        "dataset_name": selected_dataset,
+        "deg_metadata": deg_metadata
+    })
+
+    # Post-process suggestion
+    if result.deg_existence:
+        result.suggestion = None
+    else:
+        if alt_degs:
+            result.suggestion = (
+                "The DEGs for your specified disease/cell type are not available. "
+                "Please choose from the following options: " + json.dumps(alt_degs, indent=4)
+            )
+        else:
+            result.suggestion = "No DEG information available for the selected dataset."
+    return result
+
+specified_plots = {"volcano", "heatmap", "dotplot", "violin", "radar"}
+
+###############################################################################
+# Code 2: Workflow 3 (UNMODIFIED Prompt Template, Classes, Logic), plus local
+# definition for get_single_dataset_metadata to avoid ImportError.
+###############################################################################
+import os
+import json
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+
+# Import specialized plot classes, PLOT_GUIDES, and utility functions from utils.py
+from utils import (
+    HeatmapPlotConfig,
+    StatsPlotConfig,
+    RadarPlotConfig,
+    CellFrequencyPlotConfig,
+    VolcanoPlotConfig,
+    DotPlotConfig,
+    ViolinPlotConfig,
+    VennPlotConfig,
+    UpSetGenesPlotConfig,
+    UmapPlotConfig,
+    NetworkPlotConfig,
+    PLOT_GUIDES,
+    parse_tsv_data  # parse_tsv_data is still needed
+)
+def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict:
+    """
+    Filters metadata to include only the relevant dataset entry.
+    """
+    filtered = {
+        "datasets": [
+            d for d in all_metadata.get("datasets", [])
+            if d["**Dataset Metadata**"]["**Dataset Name**"] == target_dataset
+        ],
+        "notes": all_metadata.get("notes", {})
+    }
+    return filtered
+
+####################################
+# Constants
+####################################
+DATASET_INDEX_FILE = "/data/aronow/pankaj/FigChat/datasets/dataset_index_advanced_paths.tsv"
+
+####################################
+# Workflow 3
+####################################
+THIRD_PROMPT_TEMPLATE = """\
+You are a plot configuration assistant. The user wants to create a "{plot_type}". 
+Your role is to generate a valid JSON configuration for the selected plot type by accurately interpreting the dataset metadata and correcting any errors in the user query.
+
+Here is a description of how this plot type works and what arguments it needs:
+
+Plot Type: {plot_type}
+------------
+{plot_description}
+
+Below is the dataset metadata for the chosen dataset, which will help you determine valid field names, acceptable values, and constraints:
+{dataset_metadata}
+
+User Query (Refined):
+{refined_query}
+
+### Your Task:
+1. **Use Dataset Metadata:** Explicitly match field names and values to the metadata provided. If a user-provided value does not match, look for the closest valid match in the metadata (e.g., correcting "capilary" to "CAP1" if "CAP1" is valid in the metadata).
+   
+2. **Correct Misspellings and Resolve Ambiguities:**
+   - Correct gene names, disease names, and other terms using your internal knowledge. For example:
+     - Correct "AGER1" to "AGER" if "AGER" is valid.
+     - Resolve "interstitial lung diseases" to "interstitial lung disease" based on the metadata.
+   - Disambiguate ambiguous terms using context and metadata.
+
+3. **Generate Valid JSON:**
+   - Return a JSON object that conforms exactly to the schema of the correct Pydantic class for "{plot_type}" in the codebase.
+   - Exclude irrelevant or optional fields, unless specified in the user query or metadata.
+
+4. **Strict Adherence to Schema:**
+   - Use the correct field names, types, and defaults based on both the dataset metadata and the Pydantic model schema.
+   - Only include fields relevant to "{plot_type}" from the code base.
+
+5. **Output Format:**
+   - Provide your output as a JSON object, unwrapped by Markdown formatting.
+   - If a correction or adjustment is made, ensure the final JSON reflects the valid and corrected configuration.
+
+#### JSON Configuration Schema (for reference):
+{format_instructions}
+"""
+
+def get_plot_class(plot_type: str):
+    """Map the plot_type string to the correct specialized Pydantic class."""
+    if plot_type == "heatmap":
+        return HeatmapPlotConfig
+    elif plot_type == "stats":
+        return StatsPlotConfig
+    elif plot_type == "radar":
+        return RadarPlotConfig
+    elif plot_type == "cell_frequency":
+        return CellFrequencyPlotConfig
+    elif plot_type == "volcano":
+        return VolcanoPlotConfig
+    elif plot_type == "dotplot":
+        return DotPlotConfig
+    elif plot_type == "violin":
+        return ViolinPlotConfig
+    elif plot_type == "venn":
+        return VennPlotConfig
+    elif plot_type == "upset_genes":
+        return UpSetGenesPlotConfig
+    elif plot_type == "umap":
+        return UmapPlotConfig
+    elif plot_type == "network":
+        return NetworkPlotConfig
+    else:
+        raise ValueError(f"Unsupported or unknown plot_type: {plot_type}")
+
+def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str) -> str:
+    """
+    Takes a dataset name, chosen plot type, and refined query to produce a single PlotConfig JSON,
+    ready for figure_generation.py. This function wraps the Workflow 3 logic.
+    """
+    # 1) Load only the relevant metadata for the chosen dataset
+    all_metadata = parse_tsv_data(DATASET_INDEX_FILE)
+    single_dataset_metadata = get_single_dataset_metadata(all_metadata, dataset_name)
+    dataset_metadata_str = json.dumps(single_dataset_metadata, indent=4)
+
+    # 2) Retrieve the correct Pydantic class and plot description
+    chosen_class = get_plot_class(plot_type)
+    plot_description = PLOT_GUIDES.get(plot_type, "No guidance available for this plot type.")
+
+    # 3) Build a parser for the chosen class
+    parser = PydanticOutputParser(pydantic_object=chosen_class)
+
+    # 4) Create the final prompt using the THIRD_PROMPT_TEMPLATE
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            ("system", THIRD_PROMPT_TEMPLATE),
+            ("human", "{refined_query}")
+        ]
+    ).partial(
+        format_instructions=parser.get_format_instructions()
+    )
+
+    prompt_text = prompt_template.format(
+        plot_type=plot_type,
+        plot_description=plot_description,
+        dataset_metadata=dataset_metadata_str,
+        refined_query=refined_query
+    )
+
+    # Call the LLM and parse output using the chosen Pydantic class
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    chain = prompt_template | model | parser
+
+    result_config = chain.invoke({
+        "refined_query": refined_query,
+        "dataset_metadata": dataset_metadata_str,
+        "plot_description": plot_description,
+        "plot_type": plot_type
+    })
+
+    # Attempt to map the adata file path
+    ADATA_FILE_PATH_MAP = {
+        "HLCA_full_superadata_v3_norm_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/HLCA_full_superadata_v3_norm_log_deg/HLCA_full_superadata_v3_norm_log_deg.h5ad",
+        "HCA_fetal_lung_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/HCA_fetal_lung_normalized_log_deg/HCA_fetal_lung_normalized_log_deg.h5ad",
+        "BPD_infant_Sun_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/BPD_infant_Sun_normalized_log_deg/BPD_infant_Sun_normalized_log_deg.h5ad",
+        "BPD_fetal_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/BPD_fetal_normalized_log_deg/BPD_fetal_normalized_log_deg.h5ad",
+    }
+
+    # Replace the adata_file path if recognized
+    adata_file_name = os.path.basename(result_config.adata_file)
+    if adata_file_name in ADATA_FILE_PATH_MAP:
+        result_config.adata_file = ADATA_FILE_PATH_MAP[adata_file_name]
+    else:
+        raise ValueError(f"Unknown adata_file: {adata_file_name}. Please add it to the mapping.")
+
+    # Convert the resulting pydantic model to valid JSON
+    final_json = result_config.model_dump_json(indent=4)
+    return final_json
+
+###############################################################################
+# Workflow 4: Image Description Generator
+###############################################################################
 def generate_image_description(image_path: str) -> str:
     """
     Generates a description of the image using a multimodal input query.
@@ -107,124 +418,136 @@ Use clear and concise language, appropriate for computational biologists, to exp
     response = model.invoke([message])
     return response.content
 
-def plot_umap(dataset_path: str, h5ad_file: str, color_by: str) -> Dict[str, str]:
+###############################################################################
+# Merged Functionality: Single "visualization_tool" that runs everything
+###############################################################################
+def visualization_tool(user_query: str) -> dict:
     """
-    Generates a UMAP plot for the given dataset and returns the paths of the plot files.
-
-    Parameters:
-    - dataset_path: Path to the dataset directory.
-    - h5ad_file: Name of the .h5ad file.
-    - color_by: The observation column to color the plot.
-
-    Returns:
-    - Dictionary containing paths to the PDF and PNG plot files.
-    """
-    fullpath = os.path.join(dataset_path, h5ad_file)
-
-    # Check if the dataset is preloaded
-    if fullpath in PRELOADED_DATA:
-        adata = PRELOADED_DATA[fullpath]
-    else:
-        # Fallback to loading the dataset from disk
-        if not os.path.exists(fullpath):
-            raise FileNotFoundError(f"The file {fullpath} does not exist.")
-        print(f"Loading {fullpath} from disk...")
-        adata = sc.read_h5ad(fullpath)
-
-    try:
-        # Check if the specified column exists in the observations
-        if color_by not in adata.obs.columns:
-            raise ValueError(f"Column '{color_by}' not available in dataset {h5ad_file}.")
-
-        # Ensure UMAP embeddings are computed
-        if "X_umap" not in adata.obsm:
-            sc.pp.neighbors(adata)
-            sc.tl.umap(adata)
-
-        # Ensure the output directory exists
-        if not os.path.exists(PLOT_OUTPUT_DIR):
-            os.makedirs(PLOT_OUTPUT_DIR)
-
-        # Generate the UMAP plot
-        plt.figure(figsize=(10, 8))
-        sc.pl.umap(
-            adata,
-            color=color_by,
-            show=False,
-            title=f"UMAP colored by {color_by}"
-        )
-
-        # Generate a unique filename using UUID
-        unique_id = uuid.uuid4().hex
-        pdf_output_file = os.path.join(
-            PLOT_OUTPUT_DIR, f"UMAP_{h5ad_file}_{color_by}_{unique_id}.pdf"
-        )
-        png_output_file = pdf_output_file.replace(".pdf", ".png")
-
-        plt.savefig(pdf_output_file, bbox_inches="tight")
-        plt.savefig(png_output_file, bbox_inches="tight", dpi=300)
-        plt.close()
-
-        # Return the paths to the plot files
-        return {"pdf_path": pdf_output_file, "png_path": png_output_file}
-    except Exception as e:
-        raise RuntimeError(f"Error plotting UMAP: {e}")
-
-def visualization_tool(user_query: str) -> str:
-    """
-    Identifies relevant datasets, parses plot arguments, generates the plots,
+    Identifies relevant datasets, identifies appropriate plot_types, parses plot arguments, generates the plots,
     and returns the output plot paths in JSON format.
     """
-    try:
-        dataset_metadata = get_dataset_metadata()
-        model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
-        chain = prompt | model | parser
-        result: DatasetResults = chain.invoke({
-            "user_query": user_query,
-            "dataset_metadata": dataset_metadata
-        })
-        raw_output = json.dumps(result.model_dump(), indent=4)
-        return parse_and_execute(raw_output)
-    except Exception as e:
-        return json.dumps({"error": f"Error during dataset parsing: {repr(e)}"}, indent=4)
 
-def parse_and_execute(output: str) -> str:
-    """
-    Parses the JSON output, executes the appropriate plotting function,
-    and returns a JSON object with the plot output paths and plot types.
-    """
-    try:
-        data = json.loads(output)
-        plot_outputs = []
+    # 1) Run Workflow 1
+    w1_result = run_workflow1(user_query)
 
-        for result in data.get("results", []):
-            plot_type = result.get("plot_type", "").lower()
-            dataset_path = result.get("dataset_path")
-            h5ad_file = result.get("h5ad_file")
-            color_by = result.get("color_by", "cell_type")
-            
-            if plot_type == "umap":
-                try:
-                    plot_paths = plot_umap(dataset_path, h5ad_file, color_by)
-                    image_description = generate_image_description(plot_paths["png_path"])
-                    plot_outputs.append({
-                        "plot_type": "UMAP",
-                        "pdf_path": plot_paths["pdf_path"],
-                        "png_path": plot_paths["png_path"],
-                        "image_description": image_description
-                    })
-                except RuntimeError as e:
-                    # Check if error message indicates missing column
-                    if "Column '" in str(e) and "not available" in str(e):
-                        return json.dumps({
-                            "error": f"{str(e)} Please specify an alternative column (e.g., 'cell_type' or 'disease')."
-                        }, indent=4)
+    # 2) Check if the plot type requires a DEG existence check
+    if w1_result.plot_type in specified_plots:
+        # Run Workflow 2
+        dataset_metadata_str = get_dataset_metadata()
+        w2_result = run_workflow2(user_query, w1_result.dataset_name, dataset_metadata_str)
+
+        # If deg_existence = false, stop and return
+        if not w2_result.deg_existence:
+            return {
+                "output": "deg=false",
+                "dataset_name": w1_result.dataset_name,
+                "plot_type": w1_result.plot_type,
+                "reason": w1_result.reason,
+                "deg_existence": w2_result.deg_existence,
+                "suggestion": w2_result.suggestion
+            }
+        else:
+            # deg_existence = true, proceed to Workflow 3
+            try:
+                config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+
+                # Write the config to a file
+                os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
+                output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
+                with open(output_json_path, "w") as jf:
+                    jf.write(config_json)
+
+                # Execute figure_generation.py
+                output_dir = PLOT_OUTPUT_DIR
+                plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
+
+                # Process multiple plot outputs with Workflow 4 integration
+                png_entries = []
+                pdf_paths = []
+                tsv_path = None
+
+                for plot in plot_outputs_raw:
+                    if isinstance(plot, list) and len(plot) == 2:
+                        file_path = plot[0]
+                        if file_path.endswith(".pdf"):
+                            pdf_paths.append(f"{BASE_URL}{file_path}")
+                        elif file_path.endswith(".png"):
+                            png_entries.append((file_path, f"{BASE_URL}{file_path}"))
+                        elif file_path.endswith(".tsv"):
+                            tsv_path = f"{BASE_URL}{file_path}"
                     else:
-                        raise e
-            else:
-                print(f"Plot type '{plot_type}' is not supported.")
+                        raise ValueError(f"Unexpected plot format: {plot}")
 
-        # Return JSON with plot paths and types
-        return json.dumps({"plots": plot_outputs}, indent=4)
-    except Exception as e:
-        return json.dumps({"error": f"Error during execution: {repr(e)}"}, indent=4)
+                final_output = {"plot_type": w1_result.plot_type.upper()}
+
+                # Process each PNG through the description generator
+                for i, (local_path, url) in enumerate(png_entries, start=1):
+                    description = generate_image_description(local_path)
+                    final_output[f"png_path_{i}"] = url
+                    final_output[f"image_description_{i}"] = description
+
+                # Add PDF paths to output
+                for j, pdf in enumerate(pdf_paths, start=1):
+                    final_output[f"pdf_path_{j}"] = pdf
+
+                # Add TSV path if available
+                if tsv_path:
+                    final_output["tsv_path"] = tsv_path
+
+                return final_output
+
+            except Exception as e:
+                return {"error": f"Error in Workflow 3 or figure_generation: {repr(e)}"}
+
+    # 3) If plot_type not in specified_plots, skip Workflow 2 and go directly to Workflow 3
+    else:
+        try:
+            config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+
+            # Write the config to a file
+            os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
+            output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
+            with open(output_json_path, "w") as jf:
+                jf.write(config_json)
+
+            # Execute figure_generation.py
+            output_dir = PLOT_OUTPUT_DIR
+            plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
+
+            # Process multiple plot outputs with Workflow 4 integration
+            png_entries = []
+            pdf_paths = []
+            tsv_path = None
+
+            for plot in plot_outputs_raw:
+                if isinstance(plot, list) and len(plot) == 2:
+                    file_path = plot[0]
+                    if file_path.endswith(".pdf"):
+                        pdf_paths.append(f"{BASE_URL}{file_path}")
+                    elif file_path.endswith(".png"):
+                        png_entries.append((file_path, f"{BASE_URL}{file_path}"))
+                    elif file_path.endswith(".tsv"):
+                        tsv_path = f"{BASE_URL}{file_path}"
+                else:
+                    raise ValueError(f"Unexpected plot format: {plot}")
+
+            final_output = {"plot_type": w1_result.plot_type.upper()}
+
+            # Process each PNG through the description generator
+            for i, (local_path, url) in enumerate(png_entries, start=1):
+                description = generate_image_description(local_path)
+                final_output[f"png_path_{i}"] = url
+                final_output[f"image_description_{i}"] = description
+
+            # Add PDF paths to output
+            for j, pdf in enumerate(pdf_paths, start=1):
+                final_output[f"pdf_path_{j}"] = pdf
+
+            # Add TSV path if available
+            if tsv_path:
+                final_output["tsv_path"] = tsv_path
+
+            return final_output
+
+        except Exception as e:
+            return {"error": f"Error in Workflow 3 or figure_generation: {repr(e)}"}
