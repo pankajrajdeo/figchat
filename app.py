@@ -110,7 +110,6 @@ builder.add_edge("tools", "assistant")
 react_graph = builder.compile(checkpointer=memory)
 
 # Chainlit Handlers
-
 @cl.on_chat_start
 async def on_chat_start():
     """Initialize session-specific settings when a new chat begins."""
@@ -125,7 +124,18 @@ async def on_chat_start():
     }
     cl.user_session.set("react_graph", react_graph)
     cl.user_session.set("config", config)
-    await cl.Message(content="Welcome to LungMAP scExplore! How can I assist you today?").send()
+    await cl.Message(
+        content=(
+            "Welcome to LungMAP scExplore! How can I assist you today?\n\n"
+            "Here are some example queries to get you started:\n\n"
+            "1. Who are you and what can you do?\n"
+            "2. Show me detailed metadata for the HLCA dataset.\n"
+            "3. Show me a UMAP of IPF, COPD, and healthy controls with expression of SFTPC.\n"
+            "4. Show me a dot plot of AT2 marker genes in AT2 cells.\n"
+            "5. Show me a heatmap of AT2 cell marker gene expression in IPF.\n"
+            "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma."
+        )
+    ).send()
 
 @cl.on_message
 async def on_message(message: cl.Message):
