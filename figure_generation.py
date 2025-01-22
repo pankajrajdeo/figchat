@@ -1,4 +1,3 @@
-#figure_generation.py
 from preload_datasets import PRELOADED_DATA
 import scanpy as sc
 import matplotlib.pyplot as plt
@@ -431,11 +430,20 @@ def main(json_input, output_dir="results"):
 
     if plot_type == 'dotplot' or plot_type == 'all':
         plot_dot_plot_celltype(gene_symbols, cell_type, group_by = covariate_index)
-        for covariate in covariates:
-            plots = plot_dot_plot_all_celltypes(gene_symbols, covariate = covariate, color_map='Reds',plots=plots)
+        if covariates == None:
+            plots = plot_dot_plot_all_celltypes(gene_symbols, color_map='Reds',plots=plots)
+        else:
+            for covariate in covariates:
+                plots = plot_dot_plot_all_celltypes(gene_symbols, covariate = covariate, color_map='Reds',plots=plots)
 
     if plot_type == 'violin' or plot_type == 'all':
-        plots = plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=display_variables[1], plots=plots)
+        if len(display_variables) > 1:
+            dis = display_variables[1]
+        elif len(display_variables) > 0:
+            dis = display_variables[0]
+        else:
+            dis = None
+        plots = plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=dis, plots=plots)
 
     if plot_type == 'venn' or plot_type == 'all':
         if len(cell_types_to_compare)<4:
