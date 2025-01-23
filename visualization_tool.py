@@ -9,7 +9,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from utils import parse_tsv_data
 from preload_datasets import PLOT_OUTPUT_DIR
-from preload_datasets import DATASET_INDEX_FILE
 import matplotlib
 import logging
 from matplotlib import rcParams
@@ -397,12 +396,13 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
 ###############################################################################
 # Workflow 4: Image Description Generator
 ###############################################################################
-def generate_image_description(image_path: str) -> str:
+def generate_image_description(image_path: str, plot_type: str) -> str:
     """
-    Generates a description of the image using a multimodal input query.
+    Generates a description of the image using the existing prompt, dynamically including the plot type.
 
     Parameters:
     - image_path: Path to the image file.
+    - plot_type: Type of the plot (e.g., 'heatmap', 'volcano', etc.).
 
     Returns:
     - Description of the image as a string.
@@ -411,10 +411,13 @@ def generate_image_description(image_path: str) -> str:
     with open(image_path, "rb") as img_file:
         image_data = base64.b64encode(img_file.read()).decode("utf-8")
 
+    # Add plot_type to the prompt without changing the core template
     message = HumanMessage(
         content=[
-            {"type": "text", "text": """
-Provide a detailed description of the image, covering EACH AND EVERY textual and visual elements comprehensively. Summarize the overall structure (e.g., a UMAP plot with clusters of cells) and highlight key features such as cluster shapes, patterns, gradients, axes, legends, and titles. Describe trends, notable regions, or transitions, and explain how visual elements like colors relate to metadata (e.g., 'cell_type').
+            {"type": "text", "text": f"""
+Provide a detailed description of the image, covering EACH AND EVERY textual and visual element comprehensively. The image represents a '{plot_type}' plot.
+Summarize the overall structure and highlight key features such as cluster shapes, patterns, gradients, axes, legends, and titles. Describe trends, notable regions, or transitions, and explain how visual elements like colors relate to metadata (e.g., 'cell_type').
+
 Use clear and concise language, appropriate for computational biologists, to explain terms like 'clusters' and 'dimensionality reduction.' Ensure the description flows logically, starting with an overview, diving into specific details, and concluding with interpretations of visual patterns and their potential biological relevance. NOTE: WRITE DETAIL ABOUT EACH AND EVERY CELL TYPE YOU SEE AND THEIR COLOURS AS WELL.
 """}, 
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
@@ -424,6 +427,7 @@ Use clear and concise language, appropriate for computational biologists, to exp
     model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
     response = model.invoke([message])
     return response.content
+
 
 ###############################################################################
 # Merged Functionality: Single "visualization_tool" that runs everything
@@ -496,7 +500,7 @@ def visualization_tool(user_query: str) -> dict:
 
                 # Process each PNG through the description generator
                 for i, (local_path, url) in enumerate(png_entries, start=1):
-                    description = generate_image_description(local_path)
+                    description = generate_image_description(local_path, w1_result.plot_type)
                     print(f"Generated description for {local_path}: {description}")
                     final_output[f"png_path_{i}"] = url
                     final_output[f"image_description_{i}"] = description
