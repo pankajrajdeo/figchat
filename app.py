@@ -71,10 +71,10 @@ You can generate the following plot types:
 - Venn Diagrams
 - UpSet Plots
 
-### Available Tools:
-- **visualization_tool**: Generate various plot types across different datasets
-- **dataset_info_tool**: Provide detailed metadata and additional information about datasets
-- **internet_search_tool**: Perform internet searches for additional context
+### Tools Available:
+- **visualization_tool**: Use this tool to generate visualizations based on the user’s query. You can specify the dataset and choose the observation column for customizing the plot (e.g., "cell_type", "disease", or other metadata fields).
+- **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets listed above.
+- **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 
 ### Key Guidelines:
 - **Cross Check the Metadata**: If you are unsure whether a specific cell type, disease, or any other field is available for a user query, first consult the Dataset Information Tool to explore the metadata.
