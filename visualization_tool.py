@@ -441,7 +441,7 @@ def visualization_tool(user_query: str) -> dict:
     print("Workflow 1 completed. Results:", w1_result)
 
     # Define plot types for which image descriptions should be skipped
-    skip_image_description_plots = {"dotplot", "heatmap"}
+    skip_image_description_plots = {"dotplot", "heatmap", "violin", "umap", "venn", "upset_genes", "network", "radar", "cell_frequency", "volcano"}
 
     # 2) Check if the plot type requires a DEG existence check
     if w1_result.plot_type in specified_plots:
