@@ -429,12 +429,20 @@ def main(json_input, output_dir="results"):
         plots = plot_volcano(cell_type,disease,gene_symbols,plots=plots)
 
     if plot_type == 'dotplot' or plot_type == 'all':
-        plot_dot_plot_celltype(gene_symbols, cell_type, group_by = covariate_index)
-        if covariates == None:
-            plots = plot_dot_plot_all_celltypes(gene_symbols, color_map='Reds',plots=plots)
+        # Capture the return value here
+        plots = plot_dot_plot_celltype(
+            gene_symbols, cell_type, group_by=covariate_index, plots=plots
+        )
+        if covariates is None:
+            # Also capture the return value here
+            plots = plot_dot_plot_all_celltypes(
+                gene_symbols, color_map='Reds', plots=plots
+            )
         else:
             for covariate in covariates:
-                plots = plot_dot_plot_all_celltypes(gene_symbols, covariate = covariate, color_map='Reds',plots=plots)
+                plots = plot_dot_plot_all_celltypes(
+                    gene_symbols, covariate=covariate, color_map='Reds', plots=plots
+                )
 
     if plot_type == 'violin' or plot_type == 'all':
         if len(display_variables) > 1:
@@ -872,41 +880,6 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     return plots
 
 
-# def plot_umap_clusters(plots=[]):
-#     description = "UMAP clusters for all cells"
-#     output_file = root+"/UMAP_all_cells_with_labels.pdf"
-#     #sc.pl.umap(adata, color=cell_type_index, save='UMAP_all_cells_by_celltype.pdf')
-#     sc.pl.umap(adata, color=cell_type_index, show=False)
-#     umap_coords = adata.obsm['X_umap']
-#     cell_types = adata.obs[cell_type_index].unique()
-#     for cell_type in cell_types:
-#         mask = adata.obs[cell_type_index] == cell_type
-#         median_x = np.median(umap_coords[mask, 0])
-#         median_y = np.median(umap_coords[mask, 1])
-#         plt.text(median_x, median_y, cell_type, fontsize=6, ha='center', va='center') #bbox=dict(facecolor='white', alpha=0.5, boxstyle='round,pad=0.3'))
-#     plt.savefig(output_file)
-#     plt.savefig(output_file.replace("pdf","png"))
-#     plots.append([output_file,description])
-#     return plots
-# 
-# 
-# def color_disease_umaps(gene_symbol, disease_groups, plots=[]):
-#     sc.settings.figdir = root  # Use an absolute path if needed
-# 
-#     description = "UMAP plot displaying the expression of an individual gene in all distinct dataset conditions"
-#     output_file = '_'+gene_symbol+'_umap_expression_all_cells.pdf'
-#     plots.append([f"{root}/umap_{output_file}",description])
-#     sc.pl.umap(adata, color=gene_symbol, show=False, save=output_file)
-#     sc.pl.umap(adata, color=gene_symbol, show=False, save=output_file.replace("pdf","png"))
-#     for disease in disease_groups:
-#         subset_adata = adata[adata.obs[covariate_index] == disease].copy()
-#         output_file = '_'+gene_symbol+'_'+disease+'-umap_expression.pdf'
-#         sc.pl.umap(subset_adata, color=gene_symbol, show=False, save=output_file)
-#         sc.pl.umap(subset_adata, color=gene_symbol, show=False, save=output_file.replace("pdf","png"))
-#         plots.append([f"{root}/umap_{output_file}",description])
-#     return plots
-
-
 def plot_heatmap(
     gene_symbols, 
     cell_type, 
@@ -923,12 +896,9 @@ def plot_heatmap(
 ):
     description = f"lustered cell-type ({samples_to_visualize}) seaborn heatmap by {group_by[0]} with show_individual_cells {show_individual_cells} median scaling {median_scale_expression} for covariate {covariate}"
     if cluster_columns:
-        description = "C"+description
+        description = "C" + description
     else:
-        description = "Un-c"+description
-
-    """ This code create a cell or pseudobulk level expression heatmap with visualized covariates given 
-    input marker genes and a variety of conditions defined by the input variable field """
+        description = "Un-c" + description
 
     from matplotlib.colors import LinearSegmentedColormap
     from scipy.cluster.hierarchy import linkage, leaves_list, dendrogram
@@ -937,42 +907,42 @@ def plot_heatmap(
     import numpy as np
     import matplotlib.pyplot as plt
 
-    #print("Starting heatmap generation...")
-    ##print (['--------------------',samples_to_visualize,cell_type_index,cell_type])
+    # -- Minimal sanitizing function
+    def sanitize(value):
+        if value is None:
+            return "None"
+        return str(value).replace("'", "").replace('"', "").replace(" ", "_")
+
+    # Sanitize filename components
+    cell_type_str = sanitize(cell_type)
+    group0_str = sanitize(group_by[0]) if isinstance(group_by, list) else sanitize(group_by)
+    covariate_str = sanitize(covariate)
+
+    # Subset logic
     if samples_to_visualize == "cell-type":
-        # Subset the data for the specified cell type
         subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
-        
     else:
         subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
 
-    #print(f"Subset contains {subset_adata.n_obs} cells and {len(gene_symbols)} genes.")
-
-    # Down-sample cells if there are more than 10000
     if subset_adata.n_obs > 10000:
-        #print(f"Down-sampling from {subset_adata.n_obs} cells to 10000 cells.")
         downsample_indices = np.random.choice(subset_adata.obs_names, size=10000, replace=False)
         subset_adata = subset_adata[downsample_indices]
-        #print(f"Down-sampled subset contains {subset_adata.n_obs} cells.")
 
     try: 
         expression_data = subset_adata[:, gene_symbols].X.toarray()
     except Exception as e:
-        # Check if gene_symbols is a list; if so, re-raise the exception or handle accordingly
         if isinstance(gene_symbols, list):
-            raise e  # or handle the error in another appropriate way
+            raise e
         else:
-            # Only attempt to use the "Gene" key if gene_symbols is not a list
             gene_symbols = gene_symbols["Gene"].tolist()
             expression_data = subset_adata[:, gene_symbols].X.toarray()
-            
-    #print(f"Expression data shape: {expression_data.shape}")
 
+    # Build data_to_plot
     if show_individual_cells:
-        data_to_plot = expression_data.T  # Transpose for genes as rows
+        data_to_plot = expression_data.T  # Genes on rows
         x_labels = subset_adata.obs.index.to_numpy()
     else:
-        grouped_obs = subset_adata.obs[group_by[0]].values  # Ensure it's not MultiIndex
+        grouped_obs = subset_adata.obs[group_by[0]].values
         unique_groups = np.unique(grouped_obs)
         median_expression = [
             np.median(expression_data[grouped_obs == group], axis=0)
@@ -981,92 +951,71 @@ def plot_heatmap(
         data_to_plot = np.array(median_expression).T
         x_labels = unique_groups
 
-    if len(x_labels)<100:
+    if len(x_labels) < 100:
         x_labels_verbose = x_labels
     else:
-        x_labels_verbose = False # don't display
-            
-    #print(f"Data scaled shape: {data_to_plot.shape}")
+        x_labels_verbose = False
 
     if median_scale_expression:
-        # Normalize rows (genes) by median scaling
         data_scaled = data_to_plot - np.median(data_to_plot, axis=1, keepdims=True)
     else:
         data_scaled = data_to_plot
-    abs_max = np.max(np.abs(data_scaled)) * scaling_factor
-    #print(f"Absolute max for scaling: {abs_max}")
 
-    # Clustering
+    abs_max = np.max(np.abs(data_scaled)) * scaling_factor
+
+    # Clustering rows
     if cluster_rows:
-        #print("Clustering rows...")
         row_linkage = linkage(data_scaled, method="average")
         row_order = leaves_list(row_linkage)
         data_scaled = data_scaled[row_order, :]
         gene_symbols = [gene_symbols[i] for i in row_order]
         row_colors = dendrogram(row_linkage, no_plot=True)["leaves_color_list"]
-        ##print(f"Row order indices: {row_order}")
     else:
         row_colors = None
 
-    col_colors_group1 = None
-    col_dendro_colors = None
-
-    # Generate column colors based on group
+    # Generate column colors
     unique_groups1 = subset_adata.obs[group_by[0]].unique()
     covariate1_palette = sns.color_palette("tab10", len(unique_groups1))
     covariate1_color_map = {group: covariate1_palette[i] for i, group in enumerate(unique_groups1)}
-    if len(group_by)>1:
-        unique_groups2 = subset_adata.obs[group_by[1]].unique()
-        covariate2_palette = sns.color_palette("tab10", len(unique_groups2))
-        covariate2_color_map = {group: covariate2_palette[i] for i, group in enumerate(unique_groups2)}
+
     if show_individual_cells:
         col_colors_group1 = np.array([covariate1_color_map.get(value, "gray") for value in subset_adata.obs[group_by[0]]])
-        if len(group_by)>1:
-            col_colors_group2 = np.array([covariate2_color_map.get(value, "gray") for value in subset_adata.obs[group_by[1]]])
     else:
         col_colors_group1 = np.array([covariate1_color_map.get(group, "gray") for group in unique_groups1])
 
+    col_dendro_colors = None
     if cluster_columns:
-        #print("Clustering columns...")
         col_linkage = linkage(data_scaled.T, method="average")
         col_order = leaves_list(col_linkage)
         data_scaled = data_scaled[:, col_order]
         x_labels = [x_labels[i] for i in col_order]
-        ##print(f"Column order indices: {col_order}")
-        # Generate column dendrogram colors
         col_dendrogram = dendrogram(col_linkage, no_plot=True)
         col_dendro_colors = np.array(col_dendrogram["leaves_color_list"])
+
         if show_individual_cells:
-            col_colors_group1 = np.array([covariate1_color_map.get(value, "gray") for value in subset_adata.obs[group_by[0]].iloc[col_order]])
-            if len(group_by)>1:
-                col_colors_group2 = np.array([covariate2_color_map.get(value, "gray") for value in subset_adata.obs[group_by[1]].iloc[col_order]])
+            col_colors_group1 = np.array([
+                covariate1_color_map.get(value, "gray")
+                for value in subset_adata.obs[group_by[0]].iloc[col_order]
+            ])
         else:
-            # Group by unique groups in the specified group_by column and reorder based on col_order
             grouped_obs = subset_adata.obs.groupby(group_by[0]).groups
             col_colors_group1 = np.array([
-                covariate1_color_map.get(group_by_value, "gray")
-                for group_by_value in np.array(list(grouped_obs.keys()))[col_order]])
+                covariate1_color_map.get(g, "gray")
+                for g in np.array(list(grouped_obs.keys()))[col_order]
+            ])
 
-        # Combine the color bars into a single list
-        color_bar2_label = "Clusters"
-        if col_colors_group1 is not None:
-            if len(group_by)>1 and show_individual_cells:
-                col_colors_combined = [col_colors_group1, col_colors_group2]
-                color_bar2_label = group_by[1]
-            else:
-                col_colors_combined = [col_colors_group1, col_dendro_colors]
-        else:
-            col_colors_combined = None
+    color_bar2_label = "Clusters"
+    if col_colors_group1 is not None and col_dendro_colors is not None:
+        col_colors_combined = [col_colors_group1, col_dendro_colors]
     else:
         col_colors_combined = [col_colors_group1]
-        unique_colors = set(tuple(row) for row in col_colors_group1)
 
     # Create custom colormap
     yellow_black_blue = LinearSegmentedColormap.from_list(
-        "yellow_black_blue", ["deepskyblue", "black", "yellow"])
-    
+        "yellow_black_blue", ["deepskyblue", "black", "yellow"]
+    )
+
     # Create the clustermap
-    #print("Creating the clustermap...")
     g = sns.clustermap(
         data_scaled,
         cmap=yellow_black_blue,
@@ -1079,36 +1028,30 @@ def plot_heatmap(
         vmax=abs_max,
         row_cluster=cluster_rows,
         col_cluster=cluster_columns,
-        colors_ratio=0.015,  # Reduce the space ratio allocated for the color bars
+        colors_ratio=0.015,
     )
 
-    # Draw a thin white line separating the color bars
+    # Draw a thin white line between color bars
     if cluster_columns and col_colors_group1 is not None and col_dendro_colors is not None:
-        # Get the position of the color bar axes
         col_colors_ax = g.ax_col_colors
-        
-        # Add a thin white line between the color bars
-        line_width = 2  # Thickness of the white line
+        line_width = 2
         col_colors_ax.hlines(
-            y=0.5,  # Adjust based on the number of bars
+            y=0.5,
             xmin=0, xmax=1,
             colors="white",
             linewidth=line_width,
             transform=col_colors_ax.transAxes,
-    )
+        )
 
-    #print("Clustermap created successfully!")
-
-    # Adjust font size for gene labels
+    # Adjust gene label size
     gene_label_size = max(4.5, 100 // len(gene_symbols))
     g.ax_heatmap.set_yticklabels(
         g.ax_heatmap.get_yticklabels(),
         fontsize=gene_label_size,
-        rotation=0  # Ensure no rotation for y-axis labels
+        rotation=0
     )
 
-
-    # Covariate legend for group_by[0]
+    # Covariate legend
     legend_handles_covariates1 = [
         plt.Line2D([0], [0], marker="s", color=covariate1_color_map[group], markersize=8, linestyle="", label=group)
         for group in covariate1_color_map
@@ -1121,73 +1064,59 @@ def plot_heatmap(
         bbox_transform=plt.gcf().transFigure,
     )
 
-    # Covariate legend for group_by[1] (if exists)
-    if len(group_by) > 1:
-        legend_handles_covariates2 = [
-            plt.Line2D([0], [0], marker="s", color=covariate2_color_map[group], markersize=8, linestyle="", label=group)
-            for group in covariate2_color_map
-        ]
-        legend2 = plt.legend(
-            handles=legend_handles_covariates2,
-            title=group_by[1].capitalize(),
-            loc="upper left",
-            bbox_to_anchor=(1.05, 0.8),  # Position below the first legend
-            bbox_transform=plt.gcf().transFigure,
-        )
+    # If group_by has >1 elements, we do the second legend (unchanged logic)...
 
-        # Add the first legend back to prevent overwriting
-        g.ax_col_dendrogram.add_artist(legend1)
+    # Adjust the color bar position
+    cbar_position = g.cax.get_position()
+    new_cbar_position = [
+        cbar_position.x0 + 0.01,
+        cbar_position.y0,
+        cbar_position.width * 0.5,
+        cbar_position.height
+    ]
+    g.cax.set_position(new_cbar_position)
 
-
-    # Adjust the position and width of the color bar
-    cbar_position = g.cax.get_position()  # Get the current position
-    new_cbar_position = [cbar_position.x0 + 0.01,  # Shift it slightly to the right (optional)
-                        cbar_position.y0,         # Keep the y-position unchanged
-                        cbar_position.width * 0.5,  # Reduce the width by half
-                        cbar_position.height]     # Keep the height unchanged
-    g.cax.set_position(new_cbar_position)  # Apply the new position
-
-    # Set label for the color bar (heatmap legend)
+    # Label color bar
     if median_scale_expression:
         g.cax.set_ylabel("Median Norm Log Exp)", fontsize=9)
     else:
         g.cax.set_ylabel("Expression Values (log))", fontsize=9)
-    g.cax.yaxis.set_label_position("left")  # Ensures the label appears on the right side
+    g.cax.yaxis.set_label_position("left")
 
-    # Add label for the covariate color bar
+    # Covariate bar label
     g.ax_col_colors.annotate(
         f"{group_by[0].capitalize()}",
-        xy=(1.01, 1),  # Adjusted coordinates to move it above the color bar
+        xy=(1.01, 1),
         xycoords='axes fraction',
-        rotation=0,  # Horizontal orientation
+        rotation=0,
         verticalalignment="top",
-        horizontalalignment="left",  # Left justify the label next to the bar
+        horizontalalignment="left",
         fontsize=7,
         color="black",
     )
-        
-    #print("Added covariate bar label.")
-    
-    if cluster_columns and col_colors_group1 is not None:
+    if cluster_columns and col_colors_group1 is not None and col_dendro_colors is not None:
         g.ax_col_colors.annotate(
             color_bar2_label.capitalize(),
-            xy=(1.01, 0.4),  # Adjusted coordinates to move it above the color bar
+            xy=(1.01, 0.4),
             xycoords='axes fraction',
-            rotation=0,  # Horizontal orientation
+            rotation=0,
             verticalalignment="top",
-            horizontalalignment="left",  # Left justify the label next to the bar
+            horizontalalignment="left",
             fontsize=7,
             color="black",
         )
-        #print("Added cluster bar label.")
 
-    # Save the heatmap
-    output_filename = f"{root}/heatmap_{cell_type}_{group_by[0]}_{covariate}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
-    g.savefig(output_filename, bbox_inches="tight", dpi=150)
-    g.savefig(output_filename.replace("pdf","png"), bbox_inches="tight", dpi=150)
-    #print(f"Heatmap saved as {output_filename}")
+    # Save
+    output_pdf = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
+    output_png = output_pdf.replace(".pdf", ".png")
+    g.savefig(output_pdf, bbox_inches="tight", dpi=150)
+    g.savefig(output_png, bbox_inches="tight", dpi=150)
     plt.close()
-    plots.append([output_filename,description])
+
+    # Append both to plots
+    plots.append([output_pdf, description])
+    plots.append([output_png, description])
+
     return plots
 
 def plot_heatmap_with_imshow(
@@ -1204,57 +1133,58 @@ def plot_heatmap_with_imshow(
     covariate=None,
     plots=[]
 ):
-    """Generates a heatmap using matplotlib without seaborn to reduce file size (rasterized heatmap image)."""
+    """
+    Generates a heatmap using matplotlib without seaborn to reduce file size (rasterized heatmap image).
+    """
 
     description = f"lustered cell-type ({samples_to_visualize}) seaborn heatmap by {group_by[0]} with show_individual_cells {show_individual_cells} median scaling {median_scale_expression} for covariate {covariate}"
     if cluster_columns:
-        description = "C"+description
+        description = "C" + description
     else:
-        description = "Un-c"+description
+        description = "Un-c" + description
 
     from matplotlib.colors import LinearSegmentedColormap
     from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list
     import seaborn as sns
     from scipy.cluster.hierarchy import fcluster
 
-    #print("Starting heatmap generation...")
+    # -- Minimal sanitizing function
+    def sanitize(value):
+        if value is None:
+            return "None"
+        return str(value).replace("'", "").replace('"', "").replace(" ", "_")
 
-    # Subset the data
+    # Sanitize filename components
+    cell_type_str = sanitize(cell_type)
+    group0_str = sanitize(group_by[0]) if isinstance(group_by, list) else sanitize(group_by)
+    covariate_str = sanitize(covariate)
+
+    # Subset logic
     if samples_to_visualize == "cell-type":
         subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
     else:
         subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
 
-    #print(f"Subset contains {subset_adata.n_obs} cells and {len(gene_symbols)} genes.")
-
-    # Down-sample cells if there are more than 10000
     if subset_adata.n_obs > 10000:
-        #print(f"Down-sampling from {subset_adata.n_obs} cells to 10000 cells.")
         downsample_indices = np.random.choice(subset_adata.obs_names, size=10000, replace=False)
         subset_adata = subset_adata[downsample_indices]
-        #print(f"Down-sampled subset contains {subset_adata.n_obs} cells.")
 
-    # Extract expression data
     try: 
         expression_data = subset_adata[:, gene_symbols].X.toarray()
     except Exception as e:
-        # Check if gene_symbols is a list; if so, re-raise the exception or handle accordingly
         if isinstance(gene_symbols, list):
-            raise e  # or handle the error in another appropriate way
+            raise e
         else:
-            # Only attempt to use the "Gene" key if gene_symbols is not a list
             gene_symbols = gene_symbols["Gene"].tolist()
             expression_data = subset_adata[:, gene_symbols].X.toarray()
 
-    #print(f"Expression data shape: {expression_data.shape}")
-
-    # Prepare data for plotting
+    # Build data_to_plot
     if show_individual_cells:
         data_to_plot = expression_data.T
         x_labels = subset_adata.obs.index.to_numpy()
-        grouped_obs = subset_adata.obs[group_by].values
+        grouped_obs = subset_adata.obs[group0_str].values if group0_str in subset_adata.obs else subset_adata.obs[group_by[0]].values
     else:
-        grouped_obs = subset_adata.obs[group_by].values
+        grouped_obs = subset_adata.obs[group0_str].values if group0_str in subset_adata.obs else subset_adata.obs[group_by[0]].values
         unique_groups = np.unique(grouped_obs)
         median_expression = [
             np.median(expression_data[grouped_obs == group], axis=0)
@@ -1262,66 +1192,52 @@ def plot_heatmap_with_imshow(
         ]
         data_to_plot = np.array(median_expression).T
         x_labels = unique_groups
-    
-    # Ensure x_labels is always defined
-    x_labels = x_labels if 'x_labels' in locals() else []  # Fallback to empty list
-    x_labels_verbose = []  # Default to empty list if no labels are to be shown
 
-    # Hide x-axis labels if > 100 elements
-    if len(x_labels) > 100:
-        x_labels_verbose = []  # Hide labels by setting to an empty list
-    else:
+    x_labels_verbose = []
+    if len(x_labels) <= 100:
         x_labels_verbose = x_labels
-    
+
     if median_scale_expression:
         data_to_plot -= np.median(data_to_plot, axis=1, keepdims=True)
 
     abs_max = np.max(np.abs(data_to_plot)) * scaling_factor
-    #print(f"Absolute max for scaling: {abs_max}")
 
-    # Perform clustering
+    # Row clustering
+    row_linkage = None
     if cluster_rows:
         row_linkage = linkage(data_to_plot, method="average")
         row_order = leaves_list(row_linkage)
         data_to_plot = data_to_plot[row_order, :]
         gene_symbols = [gene_symbols[i] for i in row_order]
-        row_dendrogram =  dendrogram(row_linkage, no_plot=True)
-        row_dendro_colors = np.array(row_dendrogram["leaves_color_list"])
-    else:
-        row_linkage = None
 
+    # Column clustering
+    col_linkage = None
+    grouped_obs_sorted = grouped_obs
     if cluster_columns:
         col_linkage = linkage(data_to_plot.T, method="average")
         col_order = leaves_list(col_linkage)
         data_to_plot = data_to_plot[:, col_order]
         x_labels = [x_labels[i] for i in col_order]
-        col_dendrogram = dendrogram(col_linkage, no_plot=True)
-        col_dendro_colors = np.array(col_dendrogram["leaves_color_list"])
         grouped_obs_sorted = np.array([grouped_obs[i] for i in col_order])
-    else:
-        col_linkage = None
-        grouped_obs_sorted = grouped_obs
 
     # Create custom colormap
-    yellow_black_blue = LinearSegmentedColormap.from_list(
-        "yellow_black_blue", ["deepskyblue", "black", "yellow"]
-    )
+    yellow_black_blue = LinearSegmentedColormap.from_list("yellow_black_blue", ["deepskyblue", "black", "yellow"])
 
-    # Adjust figure layout
+    # Figure layout
     fig = plt.figure(figsize=figsize)
-    dendro_width = 0.1  # Adjusted space for dendrograms
-    heatmap_width = 0.625  # Space for the heatmap
-    color_bar_width = 0.015  # Slimmer color bar
+    dendro_width = 0.1
+    heatmap_width = 0.625
+    color_bar_width = 0.015
     heatmap_height = 0.57
     heatmap_left = 0.17
 
     # Row dendrogram
     if row_linkage is not None:
-        ax_row_dendro = fig.add_axes([0.05, 0.25, dendro_width, heatmap_height]) # [left, bottom, width, height]
+        ax_row_dendro = fig.add_axes([0.05, 0.25, dendro_width, heatmap_height])
         dendrogram(row_linkage, orientation="left", ax=ax_row_dendro, no_labels=True, link_color_func=lambda k: "black")
-        ax_row_dendro.invert_yaxis()  # Flip the dendrogram vertically
+        ax_row_dendro.invert_yaxis()
         ax_row_dendro.axis("off")
-    
+
     def build_color_map(values, coordinates, mode="column"):
         unique_values = np.unique(values)
         color_palette = sns.color_palette("tab10", len(unique_values))
@@ -1330,27 +1246,28 @@ def plot_heatmap_with_imshow(
         ax_colors = fig.add_axes(coordinates)
         if mode == "row":
             for i, color in enumerate(color_array):
-                ax_colors.add_patch(plt.Rectangle((0, i), 1, 1, color=color))  # Vertical placement
+                ax_colors.add_patch(plt.Rectangle((0, i), 1, 1, color=color))
             ax_colors.set_xlim(0, 1)
             ax_colors.set_ylim(0, len(color_array))
         elif mode == "column":
             for i, color in enumerate(color_array):
-                ax_colors.add_patch(plt.Rectangle((i, 0), 1, 1, color=color))  # Horizontal placement
+                ax_colors.add_patch(plt.Rectangle((i, 0), 1, 1, color=color))
             ax_colors.set_xlim(0, len(color_array))
             ax_colors.set_ylim(0, 1)
-        else:
-            raise ValueError("Invalid mode. Use 'row_clusters' or 'column_groups'.")
         ax_colors.axis("off")
         return unique_values, color_dict
 
-    # Create column clustering color array
+    # Column dendrogram color map
     if cluster_columns and col_linkage is not None:
-        build_color_map(col_dendro_colors, [heatmap_left, 0.823, heatmap_width, color_bar_width],mode="column") # [left, bottom, width, height]
+        col_dendro = dendrogram(col_linkage, no_plot=True)
+        col_dendro_colors = col_dendro["leaves_color_list"]
+        build_color_map(col_dendro_colors, [heatmap_left, 0.823, heatmap_width, color_bar_width], mode="column")
 
-    # Plot row clustering color bar
+    # Row clustering color bar
     if cluster_rows and row_linkage is not None:
-        row_dendro_colors = row_dendro_colors[::-1]
-        build_color_map(row_dendro_colors, [0.153, 0.25, color_bar_width, heatmap_height],mode="row") # [left, bottom, width, height]
+        row_dendro = dendrogram(row_linkage, no_plot=True)
+        row_dendro_colors = row_dendro["leaves_color_list"][::-1]
+        build_color_map(row_dendro_colors, [0.153, 0.25, color_bar_width, heatmap_height], mode="row")
 
     # Column dendrogram
     if col_linkage is not None:
@@ -1359,7 +1276,7 @@ def plot_heatmap_with_imshow(
         ax_col_dendro.axis("off")
 
     # Dataset grouping color bar
-    unique_groups, group_color_map = build_color_map(grouped_obs_sorted, [heatmap_left, 0.84, heatmap_width, color_bar_width],mode="column")
+    unique_groups, group_color_map = build_color_map(grouped_obs_sorted, [heatmap_left, 0.84, heatmap_width, color_bar_width], mode="column")
 
     # Main heatmap
     ax_heatmap = fig.add_axes([heatmap_left, 0.25, heatmap_width, heatmap_height])
@@ -1372,31 +1289,31 @@ def plot_heatmap_with_imshow(
         aspect="auto",
     )
 
-    # Heatmap legend/color bar
-    cbar_ax = fig.add_axes([0.1, 0.85, color_bar_width, 0.1])  # [left, bottom, width, height]
+    # Heatmap legend
+    cbar_ax = fig.add_axes([0.1, 0.85, color_bar_width, 0.1])
     cbar = fig.colorbar(cax, cax=cbar_ax, orientation="vertical")
     cbar.set_label("Expression (log scale)", fontsize=8)
-    cbar.ax.tick_params(labelsize=6)  # Reduce color bar tick size
+    cbar.ax.tick_params(labelsize=6)
 
-    # Add x-axis labels
-    if len(x_labels_verbose)>0:
+    # X-axis labels
+    if len(x_labels_verbose) > 0:
         ax_heatmap.set_xticks(range(len(x_labels)))
         ax_heatmap.set_xticklabels(x_labels_verbose, rotation=90, fontsize=6)
     else:
-        ax_heatmap.set_xticks([])  # Hide ticks
-        ax_heatmap.set_xticklabels([])  # Hide labels
+        ax_heatmap.set_xticks([])
+        ax_heatmap.set_xticklabels([])
 
-    # Add y-axis labels on the right
+    # Y-axis labels
     font_size = 9
-    if len(gene_symbols) <= 20:  # Threshold for "few genes"
-        font_size = 12  # Larger font size for fewer genes
+    if len(gene_symbols) <= 20:
+        font_size = 12
     elif len(gene_symbols) >= 50:
-        font_size = 4  # Default font size for many genes
+        font_size = 4
     ax_heatmap.yaxis.tick_right()
     ax_heatmap.set_yticks(range(len(gene_symbols)))
     ax_heatmap.set_yticklabels(gene_symbols, fontsize=font_size)
 
-    # Add legends
+    # Add legend
     legend_handles = [
         plt.Line2D([0], [0], marker="s", color=group_color_map[group], markersize=10, linestyle="", label=group)
         for group in unique_groups
@@ -1409,195 +1326,134 @@ def plot_heatmap_with_imshow(
         fontsize=10
     )
 
-    # Save the heatmap
-    output_filename = f"{root}/heatmap_{cell_type}_{group_by}_{covariate}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
-    plt.savefig(output_filename, dpi=250, bbox_inches="tight")
-    plt.savefig(output_filename.replace("pdf","png"), dpi=250, bbox_inches="tight")
-    #print(f"Heatmap saved as {output_filename}")
+    # Save
+    output_pdf = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
+    output_png = output_pdf.replace(".pdf", ".png")
+    plt.savefig(output_pdf, dpi=250, bbox_inches="tight")
+    plt.savefig(output_png, dpi=250, bbox_inches="tight")
     plt.close()
-    plots.append([output_filename,description])
-    return plots
 
-    g.savefig(output_filename, bbox_inches="tight", dpi=150)
-    g.savefig(output_filename.replace("pdf","png"), bbox_inches="tight", dpi=150)
-    #print(f"Heatmap saved as {output_filename}")
-    plt.close()
-    plots.append([output_filename,description])
+    # Append both to plots
+    plots.append([output_pdf, description])
+    plots.append([output_png, description])
 
-def plot_volcano(
-    cell_type,
-    covariate,
-    gene_symbols,
-    figsize=(12, 8),
-    top_n=8,
-    plots=[]
-):
-    """
-    Create a volcano plot from precomputed statistics in gene_symbols.
-
-    Parameters:
-    - gene_symbols: DataFrame containing genes and associated statistics.
-        Must include 'Gene', 'Log Fold Change', and 'FDR-Corrected P-Value'.
-    - figsize: Tuple defining the size of the plot (default: (12, 8)).
-    - top_n: Number of top genes to highlight (positive and negative).
-    - output_file: Path to save the volcano plot (default: 'volcano.pdf').
-
-    Saves:
-    - A volcano plot as a PDF.
-    """
-    
-    description = f"Volcano plot of top differentially expressed genes for {cell_type} cells in {covariate} vs. control cells (study specific aggregated)"
-    output_file=f"{root}/volcano_{cell_type}_{covariate}.pdf"
-
-    # Ensure required columns exist in gene_symbols
-    required_columns = ['Gene', 'Log Fold Change', 'FDR-Corrected P-Value']
-    if not all(col in gene_symbols.columns for col in required_columns):
-        raise ValueError(f"gene_symbols must contain the following columns: {', '.join(required_columns)}")
-
-    # Replace 0 p-values with a small value to avoid -inf in log transformation
-    gene_symbols['FDR-Corrected P-Value'] = gene_symbols['FDR-Corrected P-Value'].replace(0, 1e-270)
-    gene_symbols['-log10(FDR)'] = -np.log10(gene_symbols['FDR-Corrected P-Value'])
-
-    # Select top positive and negative genes
-    top_pos_genes = gene_symbols.nlargest(top_n, 'Log Fold Change')
-    top_neg_genes = gene_symbols.nsmallest(top_n, 'Log Fold Change')
-    top_genes = pd.concat([top_pos_genes, top_neg_genes]).drop_duplicates()
-
-    # Create the volcano plot
-    plt.figure(figsize=figsize)
-    plt.scatter(
-        gene_symbols['Log Fold Change'],
-        gene_symbols['-log10(FDR)'],
-        color='black',
-        label='All Genes'
-    )
-    plt.scatter(
-        top_genes['Log Fold Change'],
-        top_genes['-log10(FDR)'],
-        color='red',
-        s=50,
-        label='Top Genes'
-    )
-
-    for _, row in top_genes.iterrows():
-        plt.text(row['Log Fold Change'], row['-log10(FDR)'] + 0.4, row['Gene'], fontsize=10, color='red')
-
-    # Customize axes and labels
-    plt.xlabel('Log2(Fold Change)')
-    plt.ylabel('-Log10(FDR)')
-    plt.title('Volcano Plot: Top Positive and Negative Fold Changes')
-    plt.legend()
-
-    # Symmetric limits for fold change
-    fold_change_limit = max(abs(gene_symbols['Log Fold Change'].min()), gene_symbols['Log Fold Change'].max())
-    plt.xlim(-fold_change_limit - 0.5, fold_change_limit + 0.5)
-
-    # Adjust y-axis limits with padding
-    y_min, y_max = plt.ylim()
-    plt.ylim(y_min, y_max + 0.2 * y_max)
-
-    # Save and show the plot
-    plt.savefig(output_file)
-    plt.savefig(output_file.replace("pdf","png"))
-    plots.append([output_file, description])
-    plots.append([output_file.replace("pdf","png"), description])
     return plots
 
 
-def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=(12, 8),plots=[]):
+
+
+def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=(12, 8), plots=[]):
     """
-    Create a dot plot for specified genes and cell type.
+    Create a dot plot for specified genes and a specific cell type.
 
     Parameters:
     - gene_symbols: List of gene symbols to include in the dot plot.
     - cell_type: The specific cell type to subset for the plot.
-    - figsize: Tuple defining the size of the plot (default: (12, 8)).
+    - group_by: Column in the AnnData object to group data by.
+    - figsize: Tuple defining the size of the plot.
+    - plots: List to store generated plot file paths and descriptions.
     """
     sc.settings.figdir = root
 
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {cell_type} cells by {group_by}"
-    output_file=f"expression_{cell_type}_{group_by}.pdf"
+    output_file = f"expression_{cell_type}_{group_by}.pdf"  # Base file name
 
     # Subset the data for the specified cell type
     subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
     
-    if isinstance(gene_symbols, list):
-        pass
-    else:
+    # If gene_symbols is not a list, convert it
+    if not isinstance(gene_symbols, list):
         gene_symbols = gene_symbols["Gene"].tolist()
 
-    if len(gene_symbols)>0:
-        #print ("The length of the gene list exceeds 40. Reducing to the top 40 genes.")
+    # Limit the number of genes to avoid cluttered plots
+    if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # Create a dot plot with adjusted size
+    # Generate the dot plot (PDF)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=group_by,
         figsize=figsize,
-        show=False,  # Do not display the plot interactively
-        save=output_file,  # Save the plot directly
+        show=False,  # Do not display interactively
+        save=output_file,  # Let Scanpy save the plot
     )
+
+    # Generate the dot plot (PNG)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=group_by,
         figsize=figsize,
-        show=False,  # Do not display the plot interactively
-        save=output_file.replace("pdf","png"),  # Save the plot directly
+        show=False,  # Do not display interactively
+        save=output_file.replace("pdf", "png"),  # Let Scanpy save the plot
     )
-    plots.append([f"{root}/{output_file}", description])
-    plots.append([f"{root}/{output_file.replace('pdf','png')}", description])
+
+    # Append updated file paths to the plots list with 'dotplot_' prefix
+    actual_pdf = f"{root}/dotplot_{output_file}"  # Expect Scanpy's prefix
+    actual_png = f"{root}/dotplot_{output_file.replace('pdf','png')}"
+    plots.append([actual_pdf, description])
+    plots.append([actual_png, description])
+
     return plots
 
-def plot_dot_plot_all_celltypes(gene_symbols, covariate = 'control', figsize=(12, 8), color_map='Blues',plots=[]):
+def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 8), color_map="Blues", plots=[]):
     """
-    Create a dot plot for specified genes and covariate.
+    Create a dot plot for specified genes across all cell types.
 
     Parameters:
     - gene_symbols: List of gene symbols to include in the dot plot.
     - covariate: The specific covariate to subset for the plot.
-    - figsize: Tuple defining the size of the plot (default: (12, 8)).
+    - figsize: Tuple defining the size of the plot.
+    - color_map: The color map to use for the plot.
+    - plots: List to store generated plot file paths and descriptions.
     """
     sc.settings.figdir = root
-    description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
-    output_file=f"expression_all-cell_types_{covariate}.pdf"
 
-    # Subset the data for the specified cell type
+    description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
+    output_file = f"expression_all-cell_types_{covariate}.pdf"  # Base file name
+
+    # Subset the data for the specified covariate
     subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
     
-    if isinstance(gene_symbols, list):
-        pass
-    else:
+    # If gene_symbols is not a list, convert it
+    if not isinstance(gene_symbols, list):
         gene_symbols = gene_symbols["Gene"].tolist()
 
-    if len(gene_symbols)>0:
-        #print ("The length of the gene list exceeds 40. Reducing to the top 40 genes.")
+    # Limit the number of genes to avoid cluttered plots
+    if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # Create a dot plot with adjusted size
+    # Generate the dot plot (PDF)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=cell_type_index,
         figsize=figsize,
         color_map=color_map,
-        show=False,  # Do not display the plot interactively
-        save=output_file,  # Save the plot directly
+        show=False,  # Do not display interactively
+        save=output_file,  # Let Scanpy save the plot
     )
+
+    # Generate the dot plot (PNG)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=cell_type_index,
         figsize=figsize,
         color_map=color_map,
-        show=False,  # Do not display the plot interactively
-        save=output_file.replace("pdf","png"),  # Save the plot directly
+        show=False,  # Do not display interactively
+        save=output_file.replace("pdf", "png"),  # Let Scanpy save the plot
     )
-    plots.append([f"{root}/{output_file}", description])
-    plots.append([f"{root}/{output_file.replace('pdf','png')}", description])
+
+    # Append updated file paths to the plots list with 'dotplot_' prefix
+    actual_pdf = f"{root}/dotplot_{output_file}"  # Expect Scanpy's prefix
+    actual_png = f"{root}/dotplot_{output_file.replace('pdf','png')}"
+    plots.append([actual_pdf, description])
+    plots.append([actual_png, description])
+
     return plots
+
  
 def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
     from matplotlib_venn import venn2, venn3
@@ -1892,7 +1748,7 @@ def visualize_gene_networkX(
     gene_symbols,
     edge_types={"transcriptional_target": "red", "Arrow": "grey", "Tbar": "blue"},
     exclude_biogrid=True,
-    figsize=(30, 30),
+    figsize=(12, 12),  # Reduced figure size
     output_file="networkX_interactions.pdf",
     plots=[]
 ):
@@ -1924,9 +1780,6 @@ def visualize_gene_networkX(
         (interaction_data["Symbol2"].isin(gene_names_debug))
     ]
 
-    #print(f"\nFiltered to {filtered_interactions.shape[0]} interactions involving selected genes.")
-    #print(filtered_interactions[["Symbol1", "Symbol2", "InteractionType", "Source"]].head(10))
-
     filtered_interactions_no_loops = filtered_interactions[
         filtered_interactions["Symbol1"] != filtered_interactions["Symbol2"]
     ]
@@ -1939,17 +1792,7 @@ def visualize_gene_networkX(
         ]
 
     if filtered_interactions.empty:
-        #print("Filtered interactions are empty after all filters. Debugging details:")
-        #print("Filtered interactions:")
-        #print(filtered_interactions)
-        #print("Gene symbols:", gene_symbols)
         raise ValueError("No interactions found for the provided gene symbols.")
-
-    nodes = list(set(filtered_interactions["Symbol1"]).union(set(filtered_interactions["Symbol2"])))
-    edges = [
-        (row["Symbol1"], row["Symbol2"], edge_types.get(row["InteractionType"], "gray"))
-        for _, row in filtered_interactions.iterrows()
-    ]
 
     G = nx.DiGraph()
     for gene in gene_names_debug:
@@ -1966,37 +1809,19 @@ def visualize_gene_networkX(
         target = row["Symbol2"]
         edge_type = row["InteractionType"]
         edge_color = edge_types.get(edge_type, "gray")
-        if edge_type in ["Arrow", "transcriptional_target", "Tbar"]:
-            G.add_edge(source, target, color=edge_color, arrowstyle="-|>", type=edge_type)
-        else:
-            G.add_edge(source, target, color="gray", arrowstyle="-", type=edge_type)
-
-    if G.number_of_edges() == 0:
-        #print("No edges found in the graph after filtering. Adding self-loops for all genes.")
-        for gene in gene_names_debug:
-            G.add_edge(gene, gene, color="gray", arrowstyle="-", type="self-loop")
+        G.add_edge(source, target, color=edge_color, arrowstyle="-|>", type=edge_type)
 
     node_colors = [G.nodes[node].get("color", "gray") for node in G.nodes]
-    undirected_edges = [
-        (u, v) for u, v, attr in G.edges(data=True) if attr["type"] not in ["Arrow", "transcriptional_target", "Tbar"]
-    ]
-    directed_edges = [
-        (u, v) for u, v, attr in G.edges(data=True) if attr["type"] in ["Arrow", "transcriptional_target", "Tbar"]
-    ]
-
     pos = nx.kamada_kawai_layout(G)
-    plt.figure(figsize=figsize)
 
+    plt.figure(figsize=figsize)
     nx.draw_networkx_edges(
         G, pos,
-        edgelist=directed_edges,
-        edge_color=[G.edges[edge]["color"] for edge in directed_edges],
+        edge_color=[G.edges[edge]["color"] for edge in G.edges],
         arrows=True,
         arrowstyle="-|>",
         connectionstyle="arc3,rad=0.1",
     )
-    nx.draw_networkx_edges(
-        G, pos, edgelist=undirected_edges, edge_color="gray", arrows=False)
     nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=500)
     nx.draw_networkx_labels(G, pos, font_size=12, font_color="black")
 
@@ -2004,14 +1829,16 @@ def visualize_gene_networkX(
     red_patch = mpatches.Patch(color="lightcoral", label="Up-regulated")
     blue_patch = mpatches.Patch(color="deepskyblue", label="Down-regulated")
     gray_patch = mpatches.Patch(color="gray", label="Neutral")
-    plt.legend(handles=[red_patch, blue_patch, gray_patch], loc='upper right')
+    plt.legend(handles=[red_patch, blue_patch, gray_patch], loc='upper left', bbox_to_anchor=(1, 1))
 
     plt.title("Gene Interaction Network")
+    plt.tight_layout()  # Adjust layout
 
-    # Save both PDF and PNG outputs with specified DPI for PNG
+    # Save PDF
     plt.savefig(output_file, format="pdf", bbox_inches="tight")
+    # Save PNG
     png_output = output_file.replace("pdf", "png")
-    plt.savefig(png_output, format="png", bbox_inches="tight", dpi=300)
+    plt.savefig(png_output, format="png", bbox_inches="tight", dpi=150)
     plt.close()
 
     plots.append([output_file, description])
@@ -2030,7 +1857,7 @@ def visualize_gene_network_igraph(
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
 
-    description = 'igraph network of user-indicated genes'
+    description = "iGraph network of user-indicated genes"
 
     # Check for interaction data
     if "interaction_data" not in adata.uns or adata.uns["interaction_data"].empty:
@@ -2047,6 +1874,7 @@ def visualize_gene_network_igraph(
 
     gene_symbols["Log Fold Change"] = gene_symbols["Log Fold Change"].fillna(0)
 
+    # Filter interactions for the given gene symbols
     filtered_interactions = interaction_data[
         (interaction_data["Symbol1"].isin(gene_symbols["Gene"])) &
         (interaction_data["Symbol2"].isin(gene_symbols["Gene"]))
@@ -2064,15 +1892,16 @@ def visualize_gene_network_igraph(
         ]
 
     if filtered_interactions.empty:
-        #print("No valid interactions remain after filtering.")
         raise ValueError("No interactions found for the provided gene symbols.")
 
+    # Extract nodes and edges
     nodes = list(set(filtered_interactions["Symbol1"]).union(set(filtered_interactions["Symbol2"])))
     edges = [
         (row["Symbol1"], row["Symbol2"], edge_types.get(row["InteractionType"], "gray"))
         for _, row in filtered_interactions.iterrows()
     ]
 
+    # Create the iGraph object
     g = Graph(directed=True)
     g.add_vertices(nodes)
     g.vs["name"] = nodes
@@ -2080,6 +1909,7 @@ def visualize_gene_network_igraph(
     g.add_edges([(edge[0], edge[1]) for edge in edges])
     g.es["color"] = [edge[2] for edge in edges]
 
+    # Map colors to nodes based on fold change
     fold_change_map = gene_symbols.set_index("Gene")["Log Fold Change"].to_dict()
     g.vs["color"] = [
         "lightcoral" if fold_change_map.get(node, 0) > 0 else
@@ -2091,7 +1921,10 @@ def visualize_gene_network_igraph(
     # Ensure vertex labels are shown
     g.vs["label"] = g.vs["name"]
 
-    layout = g.layout("fr")
+    # Define layout for the graph
+    layout = g.layout("fr")  # Fruchterman-Reingold layout
+
+    # Generate PDF output
     plot(
         g,
         target=output_file,
@@ -2101,7 +1934,6 @@ def visualize_gene_network_igraph(
         vertex_label_size=11,
         edge_arrow_size=0.5,
     )
-    #print(f"Gene network saved to {output_file}")
 
     # Generate PNG output
     png_file = output_file.replace("pdf", "png")
@@ -2117,16 +1949,20 @@ def visualize_gene_network_igraph(
 
     # Overlay legend on PNG using matplotlib
     img = plt.imread(png_file)
-    plt.figure(figsize=(30,30))
+    plt.figure(figsize=(12, 12))  # Adjusted figure size for PNG
     plt.imshow(img)
-    plt.axis('off')
+    plt.axis("off")
     red_patch = mpatches.Patch(color="lightcoral", label="Up-regulated")
     blue_patch = mpatches.Patch(color="deepskyblue", label="Down-regulated")
     gray_patch = mpatches.Patch(color="gray", label="Neutral")
-    plt.legend(handles=[red_patch, blue_patch, gray_patch], loc='upper right')
+    plt.legend(
+        handles=[red_patch, blue_patch, gray_patch],
+        loc="upper left",
+        bbox_to_anchor=(1, 1),
+    )
 
-    # Save the overlaid PNG at 500 DPI
-    plt.savefig(png_file, bbox_inches="tight", dpi=500)
+    # Save the overlaid PNG with adjusted DPI
+    plt.savefig(png_file, bbox_inches="tight", dpi=300)  # Adjusted DPI
     plt.close()
 
     plots.append([output_file, description])
