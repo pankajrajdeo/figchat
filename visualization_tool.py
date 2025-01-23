@@ -212,7 +212,7 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
             result.suggestion = "No DEG information available for the selected dataset."
     return result
 
-specified_plots = {"volcano", "heatmap", "dotplot", "violin", "radar"}
+specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  #plot types that can accept external gene symbols - heatmap, dotplot, network
 
 ###############################################################################
 # Code 2: Workflow 3 (UNMODIFIED Prompt Template, Classes, Logic), plus local
@@ -434,16 +434,21 @@ def visualization_tool(user_query: str) -> dict:
     """
 
     # 1) Run Workflow 1
+    print("=== Starting Workflow 1 ===")
     w1_result = run_workflow1(user_query)
+    print("Workflow 1 completed. Results:", w1_result)
 
     # 2) Check if the plot type requires a DEG existence check
     if w1_result.plot_type in specified_plots:
+        print("=== Plot type requires DEG check. Starting Workflow 2 ===")
         # Run Workflow 2
         dataset_metadata_str = get_dataset_metadata()
         w2_result = run_workflow2(user_query, w1_result.dataset_name, dataset_metadata_str)
+        print("Workflow 2 completed. Results:", w2_result)
 
         # If deg_existence = false, stop and return
         if not w2_result.deg_existence:
+            print("DEG existence check failed. Terminating pipeline.")
             return {
                 "output": "deg=false",
                 "dataset_name": w1_result.dataset_name,
@@ -453,9 +458,10 @@ def visualization_tool(user_query: str) -> dict:
                 "suggestion": w2_result.suggestion
             }
         else:
-            # deg_existence = true, proceed to Workflow 3
+            print("DEG existence confirmed. Proceeding to Workflow 3.")
             try:
                 config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+                print("Workflow 3 completed. Config JSON generated:", config_json)
 
                 # Write the config to a file
                 os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
@@ -466,6 +472,7 @@ def visualization_tool(user_query: str) -> dict:
                 # Execute figure_generation.py
                 output_dir = PLOT_OUTPUT_DIR
                 plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
+                print("Figure generation outputs:", plot_outputs_raw)
 
                 # Process multiple plot outputs with Workflow 4 integration
                 png_entries = []
@@ -489,6 +496,7 @@ def visualization_tool(user_query: str) -> dict:
                 # Process each PNG through the description generator
                 for i, (local_path, url) in enumerate(png_entries, start=1):
                     description = generate_image_description(local_path)
+                    print(f"Generated description for {local_path}: {description}")
                     final_output[f"png_path_{i}"] = url
                     final_output[f"image_description_{i}"] = description
 
@@ -500,15 +508,20 @@ def visualization_tool(user_query: str) -> dict:
                 if tsv_path:
                     final_output["tsv_path"] = tsv_path
 
+                print("Final output ready:", final_output)
                 return final_output
 
             except Exception as e:
-                return {"error": f"Error in Workflow 3 or figure_generation: {repr(e)}"}
+                error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
+                print(error_msg)
+                return {"error": error_msg}
 
     # 3) If plot_type not in specified_plots, skip Workflow 2 and go directly to Workflow 3
     else:
+        print("=== Plot type does not require DEG check. Starting Workflow 3 directly ===")
         try:
             config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+            print("Workflow 3 completed. Config JSON generated:", config_json)
 
             # Write the config to a file
             os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
@@ -519,6 +532,7 @@ def visualization_tool(user_query: str) -> dict:
             # Execute figure_generation.py
             output_dir = PLOT_OUTPUT_DIR
             plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
+            print("Figure generation outputs:", plot_outputs_raw)
 
             # Process multiple plot outputs with Workflow 4 integration
             png_entries = []
@@ -542,6 +556,7 @@ def visualization_tool(user_query: str) -> dict:
             # Process each PNG through the description generator
             for i, (local_path, url) in enumerate(png_entries, start=1):
                 description = generate_image_description(local_path)
+                print(f"Generated description for {local_path}: {description}")
                 final_output[f"png_path_{i}"] = url
                 final_output[f"image_description_{i}"] = description
 
@@ -553,7 +568,10 @@ def visualization_tool(user_query: str) -> dict:
             if tsv_path:
                 final_output["tsv_path"] = tsv_path
 
+            print("Final output ready:", final_output)
             return final_output
 
         except Exception as e:
-            return {"error": f"Error in Workflow 3 or figure_generation: {repr(e)}"}
+            error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
+            print(error_msg)
+            return {"error": error_msg} 
