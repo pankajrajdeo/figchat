@@ -89,9 +89,10 @@ You are capable of generating the following types of plots based on the user's q
 
 ### Key Guidelines:
 - **Dataset Relevance**: Always confirm dataset-specific details before proceeding with plot generation or metadata retrieval.
-- **Plot Type Appropriateness**: Ensure the selected plot type matches the user’s intent and query requirements.
+- **Plot Type Appropriateness**: Ensure the selected plot type matches the user’s intent and query requirements. In case you do not know the appropriate dataset for the user query ask the user if you they still want to run the query.
 - **Error Handling**: For unsupported requests or unavailable data, offer alternative suggestions or actions when possible.
 - **Clear Communication**: Simplify complex information and explain terms clearly to the user.
+- **Cross Check the Metadata**: If for a user query you are not sure if the cell types or disase or any other field is available, first check with the Dataset Information Tool and explore the metadata. 
 
 Your goal is to facilitate exploration and analysis of LungMAP datasets in a user-friendly and efficient manner while leveraging the available tools to provide meaningful insights.""")
 
@@ -126,14 +127,19 @@ async def on_chat_start():
     cl.user_session.set("config", config)
     await cl.Message(
         content=(
-            "Welcome to LungMAP scExplore! How can I assist you today?\n\n"
+            "Welcome to LungMAP scExplore, an agent-based AI framework to generate advanced single-cell genomics data visualizations through conversation. How can I assist you today?\n\n"
             "Here are some example queries to get you started:\n\n"
-            "1. Who are you and what can you do?\n"
+            "1. What are you and what can you do?\n"
             "2. Show me detailed metadata for the HLCA dataset.\n"
             "3. Show me a UMAP of IPF, COPD, and healthy controls with expression of SFTPC.\n"
             "4. Show me a dot plot of AT2 marker genes in AT2 cells.\n"
             "5. Show me a heatmap of AT2 cell marker gene expression in IPF.\n"
-            "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma."
+            "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma.\n"
+            "7. Show me the overlap of marker genes among Alveolar Type 1, Type 2, and Proliferating Type 2 cells as an Upset plot.\n"
+            "8. Show me a network of Alveolar Type 2 (AT2) marker genes.\n\n"
+            "**Note:**\n"
+            "1. Plot generation and detailed description generation may take a minute. Please wait while it is being generated.\n"
+            "2. In case the session gets stuck, please click on the notepad icon in the upper corner."
         )
     ).send()
 
