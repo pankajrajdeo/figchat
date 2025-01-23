@@ -9,6 +9,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from utils import parse_tsv_data
 from preload_datasets import PLOT_OUTPUT_DIR
+from preload_datasets import DATASET_INDEX_FILE
 import matplotlib
 import logging
 from matplotlib import rcParams
