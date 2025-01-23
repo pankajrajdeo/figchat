@@ -659,13 +659,13 @@ class NetworkPlotConfig(BasePlotConfig):
         ...,
         description="Specific cell type is required for filtering or labeling the network."
     )
+    disease: Optional[str] = Field(
+        None,
+        description="Condition used in the DE comparison for labeling."
+    )
     covariate_index: str = Field(
         ...,
         description="The primary grouping index in adata.obs, such as 'disease'."
-    )
-    covariates: List[str] = Field(
-        ...,
-        description="covariates: List of conditions (e.g., diseases) to filter by. This list must be non-empty. If not specified, choose a non-disease condition."
     )
     n_genes: Optional[int] = Field(
         1000,
@@ -834,9 +834,9 @@ PLOT_GUIDES = {
         "  - direction: A variable describing whether to look at differentially expressed genes in disease vs control, either 'regulated', 'up', 'down' or to look at cell type specific 'markers' stored in the H5AD.\n"
         "  - cell_type: A specific cell type to subset the data\n"
         "  - covariate_index: Key in adata.obs for filtering covariates.\n"
-        "  - covariates: List of specific values for the covariate index to filter data.\n"
         "Optional:\n"
         "  - n_genes: Number of top genes to use if gene_symbols is not provided (default=1000).\n"
+        "  - disease: Condition used in the DE comparison for labeling.\n"
         "  - network_technology: 'igraph' or 'networkx' for graphing library selection (default 'igraph').\n"
         "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names.\n"
     )
