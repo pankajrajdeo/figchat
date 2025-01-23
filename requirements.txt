@@ -9,5 +9,7 @@ pandas==2.2.3
 pydantic==2.10.5
 python-dotenv==1.0.1
 scanpy==1.10.4
+igraph
+networkx
 duckduckgo-search
 langgraph-checkpoint-sqlite
