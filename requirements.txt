@@ -11,4 +11,3 @@ python-dotenv==1.0.1
 scanpy==1.10.4
 duckduckgo-search
 langgraph-checkpoint-sqlite
-pillow
