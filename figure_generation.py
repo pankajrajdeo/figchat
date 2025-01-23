@@ -33,6 +33,12 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 rcParams['font.family'] = 'DejaVu Sans'
 
 
+def sanitize_filename(filename):
+    """
+    Remove invalid characters from the filename and replace spaces with underscores.
+    """
+    return filename.replace("'", "").replace(" ", "_").replace(",", "_").replace("+", "_")
+
 ########################################################################################################
 # --- Dynamic UMAP Functions ---
 def assign_numeric_labels(adata, category_col):
@@ -490,10 +496,10 @@ def main(json_input, output_dir="results"):
 
     if plot_type == 'network' or plot_type == 'all':
         output_file = f"{root}/{cell_type}_{disease}_{n_genes}_{direction}-network.pdf"
-        if network_technology == "igraph":
-            plots = visualize_gene_network_igraph(gene_symbols,output_file=output_file,plots=plots)
-        else:
-            plots = visualize_gene_networkX(gene_symbols,output_file=output_file,plots=plots)
+        #if network_technology == "igraph":
+        plots = visualize_gene_network_igraph(gene_symbols,output_file=output_file,plots=plots)
+        #else:
+            #plots = visualize_gene_networkX(gene_symbols,output_file=output_file,plots=plots)
 
     end_time = time.time()  # End the timer
     #print(f"Execution time: {end_time - start_time:.2f} seconds")
@@ -1834,17 +1840,19 @@ def visualize_gene_networkX(
     plt.title("Gene Interaction Network")
     plt.tight_layout()  # Adjust layout
 
+    # Sanitize filenames
+    output_file = sanitize_filename(output_file)
+    png_output = sanitize_filename(output_file.replace("pdf", "png"))
+
     # Save PDF
     plt.savefig(output_file, format="pdf", bbox_inches="tight")
     # Save PNG
-    png_output = output_file.replace("pdf", "png")
     plt.savefig(png_output, format="png", bbox_inches="tight", dpi=150)
     plt.close()
 
     plots.append([output_file, description])
     plots.append([png_output, description])
     return plots
-
 
 def visualize_gene_network_igraph(
     gene_symbols,
@@ -1924,24 +1932,29 @@ def visualize_gene_network_igraph(
     # Define layout for the graph
     layout = g.layout("fr")  # Fruchterman-Reingold layout
 
+    # Sanitize filenames
+    output_file = sanitize_filename(output_file)
+    png_file = sanitize_filename(output_file.replace("pdf", "png"))
+
     # Generate PDF output
     plot(
         g,
         target=output_file,
         layout=layout,
         vertex_size=20,
+        bbox=(1300, 1300),
         margin=50,
         vertex_label_size=11,
         edge_arrow_size=0.5,
     )
 
     # Generate PNG output
-    png_file = output_file.replace("pdf", "png")
     plot(
         g,
         target=png_file,
         layout=layout,
         vertex_size=20,
+        bbox=(1300, 1300),
         margin=50,
         vertex_label_size=11,
         edge_arrow_size=0.5,
@@ -1962,7 +1975,7 @@ def visualize_gene_network_igraph(
     )
 
     # Save the overlaid PNG with adjusted DPI
-    plt.savefig(png_file, bbox_inches="tight", dpi=300)  # Adjusted DPI
+    plt.savefig(png_file, bbox_inches="tight", dpi=200)  # Adjusted DPI
     plt.close()
 
     plots.append([output_file, description])
