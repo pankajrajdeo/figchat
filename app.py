@@ -112,7 +112,7 @@ async def on_chat_start():
             "7. Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as an Upset plot.\n"
             "8. Show me a gene regulatory network of IPF DEGs in fibroblasts.\n\n"
             "**Note:**\n"
-            "1. Plot generation and detailed description generation may take a minute. Please wait while it is being generated.\n"
+            "1. Plot generation and detailed description generation may take a minute or two. Please wait while it is being generated.\n"
             "2. In case the session gets stuck, please click on the notepad icon in the upper corner."
         )
     ).send()
