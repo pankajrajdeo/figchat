@@ -9,6 +9,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from utils import parse_tsv_data
 from preload_datasets import PLOT_OUTPUT_DIR
+from preload_datasets import DATASET_INDEX_FILE
 import matplotlib
 import logging
 from matplotlib import rcParams
@@ -376,10 +377,10 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
 
     # Attempt to map the adata file path
     ADATA_FILE_PATH_MAP = {
-        "HLCA_full_superadata_v3_norm_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/HLCA_full_superadata_v3_norm_log_deg/HLCA_full_superadata_v3_norm_log_deg.h5ad",
-        "HCA_fetal_lung_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/HCA_fetal_lung_normalized_log_deg/HCA_fetal_lung_normalized_log_deg.h5ad",
-        "BPD_infant_Sun_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/BPD_infant_Sun_normalized_log_deg/BPD_infant_Sun_normalized_log_deg.h5ad",
-        "BPD_fetal_normalized_log_deg.h5ad": "/data/aronow/pankaj/FigChat/datasets/BPD_fetal_normalized_log_deg/BPD_fetal_normalized_log_deg.h5ad",
+        "HLCA_full_superadata_v3_norm_log_deg.h5ad": "/reference-data/figchat_datasets/HLCA_full_superadata_v3_norm_log_deg/HLCA_full_superadata_v3_norm_log_deg.h5ad",
+        "HCA_fetal_lung_normalized_log_deg.h5ad": "/reference-data/figchat_datasets/HCA_fetal_lung_normalized_log_deg/HCA_fetal_lung_normalized_log_deg.h5ad",
+        "BPD_infant_Sun_normalized_log_deg.h5ad": "/reference-data/figchat_datasets/BPD_infant_Sun_normalized_log_deg/BPD_infant_Sun_normalized_log_deg.h5ad",
+        "BPD_fetal_normalized_log_deg.h5ad": "/reference-data/figchat_datasets/BPD_fetal_normalized_log_deg/BPD_fetal_normalized_log_deg.h5ad",
     }
 
     # Replace the adata_file path if recognized
