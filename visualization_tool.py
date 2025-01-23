@@ -213,7 +213,7 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
             result.suggestion = "No DEG information available for the selected dataset."
     return result
 
-specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  #plot types that can accept external gene symbols - heatmap, dotplot, network
+specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  # Plot types that require DEG check
 
 ###############################################################################
 # Code 2: Workflow 3 (UNMODIFIED Prompt Template, Classes, Logic), plus local
@@ -241,6 +241,7 @@ from utils import (
     PLOT_GUIDES,
     parse_tsv_data  # parse_tsv_data is still needed
 )
+
 def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict:
     """
     Filters metadata to include only the relevant dataset entry.
@@ -253,11 +254,6 @@ def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict
         "notes": all_metadata.get("notes", {})
     }
     return filtered
-
-####################################
-# Constants
-####################################
-DATASET_INDEX_FILE = "/data/aronow/pankaj/FigChat/datasets/dataset_index_advanced_paths.tsv"
 
 ####################################
 # Workflow 3
@@ -444,6 +440,9 @@ def visualization_tool(user_query: str) -> dict:
     w1_result = run_workflow1(user_query)
     print("Workflow 1 completed. Results:", w1_result)
 
+    # Define plot types for which image descriptions should be skipped
+    skip_image_description_plots = {"dotplot", "heatmap"}
+
     # 2) Check if the plot type requires a DEG existence check
     if w1_result.plot_type in specified_plots:
         print("=== Plot type requires DEG check. Starting Workflow 2 ===")
@@ -499,12 +498,18 @@ def visualization_tool(user_query: str) -> dict:
 
                 final_output = {"plot_type": w1_result.plot_type.upper()}
 
-                # Process each PNG through the description generator
-                for i, (local_path, url) in enumerate(png_entries, start=1):
-                    description = generate_image_description(local_path, w1_result.plot_type)
-                    print(f"Generated description for {local_path}: {description}")
-                    final_output[f"png_path_{i}"] = url
-                    final_output[f"image_description_{i}"] = description
+                # Generate image descriptions only if plot_type is not in skip list
+                if w1_result.plot_type not in skip_image_description_plots:
+                    for i, (local_path, url) in enumerate(png_entries, start=1):
+                        description = generate_image_description(local_path, w1_result.plot_type)
+                        print(f"Generated description for {local_path}: {description}")
+                        final_output[f"png_path_{i}"] = url
+                        final_output[f"image_description_{i}"] = description
+                else:
+                    for i, (local_path, url) in enumerate(png_entries, start=1):
+                        final_output[f"png_path_{i}"] = url
+                        # Optionally, you can add a default message or leave the description out
+                        final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
 
                 # Add PDF paths to output
                 for j, pdf in enumerate(pdf_paths, start=1):
@@ -559,12 +564,18 @@ def visualization_tool(user_query: str) -> dict:
 
             final_output = {"plot_type": w1_result.plot_type.upper()}
 
-            # Process each PNG through the description generator
-            for i, (local_path, url) in enumerate(png_entries, start=1):
-                description = generate_image_description(local_path, w1_result.plot_type)  # Pass plot_type here
-                print(f"Generated description for {local_path}: {description}")
-                final_output[f"png_path_{i}"] = url
-                final_output[f"image_description_{i}"] = description
+            # Generate image descriptions only if plot_type is not in skip list
+            if w1_result.plot_type not in skip_image_description_plots:
+                for i, (local_path, url) in enumerate(png_entries, start=1):
+                    description = generate_image_description(local_path, w1_result.plot_type)  # Pass plot_type here
+                    print(f"Generated description for {local_path}: {description}")
+                    final_output[f"png_path_{i}"] = url
+                    final_output[f"image_description_{i}"] = description
+            else:
+                for i, (local_path, url) in enumerate(png_entries, start=1):
+                    final_output[f"png_path_{i}"] = url
+                    # Optionally, you can add a default message or leave the description out
+                    final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
 
             # Add PDF paths to output
             for j, pdf in enumerate(pdf_paths, start=1):
