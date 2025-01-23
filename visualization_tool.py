@@ -561,7 +561,7 @@ def visualization_tool(user_query: str) -> dict:
 
             # Process each PNG through the description generator
             for i, (local_path, url) in enumerate(png_entries, start=1):
-                description = generate_image_description(local_path)
+                description = generate_image_description(local_path, w1_result.plot_type)  # Pass plot_type here
                 print(f"Generated description for {local_path}: {description}")
                 final_output[f"png_path_{i}"] = url
                 final_output[f"image_description_{i}"] = description
@@ -580,4 +580,4 @@ def visualization_tool(user_query: str) -> dict:
         except Exception as e:
             error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
             print(error_msg)
-            return {"error": error_msg} 
+            return {"error": error_msg}
