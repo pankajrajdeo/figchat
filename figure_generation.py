@@ -10,7 +10,8 @@ import seaborn as sns
 import scipy.stats as stats
 from scipy.stats import mannwhitneyu
 import os
-
+import re
+import uuid
 import matplotlib_venn as venn
 import upsetplot as upset
 import networkx as nx
@@ -32,12 +33,24 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 # Set a default font family to avoid Arial warnings
 rcParams['font.family'] = 'DejaVu Sans'
 
-
 def sanitize_filename(filename):
     """
-    Remove invalid characters from the filename and replace spaces with underscores.
+    Remove invalid characters from the filename, replace spaces with underscores,
+    and append a UUID to ensure unique filenames.
     """
-    return filename.replace("'", "").replace(" ", "_").replace(",", "_").replace("+", "_")
+    # Remove invalid characters and replace spaces with underscores
+    sanitized = filename.replace("'", "").replace(" ", "_").replace(",", "_").replace("+", "_")
+    
+    # Split the filename into name and extension
+    name, ext = os.path.splitext(sanitized)
+    
+    # Generate a UUID4 string
+    unique_id = uuid.uuid4()
+    
+    # Append the UUID to the filename
+    sanitized_filename = f"{name}_{unique_id}{ext}"
+    
+    return sanitized_filename
 
 ########################################################################################################
 # --- Dynamic UMAP Functions ---
@@ -275,8 +288,8 @@ def main_visualizations(
         sub.replace(" ", "_").replace("+", "plus") for sub in subset_values
     ) if subset_values else "All"
     gene_suffix = f"_{'_'.join(gene_list)}" if gene_flag else ""
-    output_path_png = f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.png"
-    output_path_pdf = f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.pdf"
+    output_path_png = sanitize_filename(f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.png")
+    output_path_pdf = sanitize_filename(f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.pdf")
 
     plt.savefig(output_path_png, bbox_inches='tight', dpi=300)
     plt.savefig(output_path_pdf, bbox_inches='tight', dpi=300)
@@ -386,7 +399,7 @@ def main(json_input, output_dir="results"):
     # Import gene signatures from the h5ad
 
     if plot_type != 'venn' and plot_type != 'upset_genes':
-        gene_symbols, filtered_df = h5ad_gene_signatures(gene_symbols,direction,cell_type,disease,n_genes)
+        gene_symbols, filtered_df = h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes)
 
 
     # Ensure only the specified `covariates` are included
@@ -398,41 +411,88 @@ def main(json_input, output_dir="results"):
         covariate_index = variable1_index
 
     if plot_type == 'stats' or plot_type == 'all':
-        output_file = f"{root}/Genes-{cell_type}_{disease}_{direction}.tsv"
+        output_file = sanitize_filename(f"{root}/Genes-{cell_type}_{disease}_{direction}.tsv")
         filtered_df.to_csv(output_file, sep="\t", index=False)
-        plots.append([output_file,f"Differentially expressed {direction} genes in {cell_type} by {disease}"])
+        plots.append([output_file, f"Differentially expressed {direction} genes in {cell_type} by {disease}"])
 
-    if plot_type == 'heatmap' or plot_type == 'all':
-        if cell_type != None and len(gene_symbols)>0:
-            if len(gene_symbols)<250 and heatmap_technology == 'seaborn':
-                    plots = plot_heatmap(gene_symbols,cell_type,group_by=display_variables,cluster_rows=True,
-                            cluster_columns=True,show_individual_cells=show_individual_cells,median_scale_expression=False,
-                            samples_to_visualize="cell-type",covariate=disease,plots=plots)
+    if (plot_type == 'heatmap' or plot_type == 'all') and direction != "markers":
+        if cell_type is not None and len(gene_symbols) > 0:
+            # Determine the covariate based on direction
+            covar = "markers" if direction == "markers" else disease
+            
+            if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
+                plots = plot_heatmap(
+                    gene_symbols,
+                    cell_type,
+                    group_by=display_variables,
+                    cluster_rows=True,
+                    cluster_columns=True,
+                    show_individual_cells=show_individual_cells,
+                    median_scale_expression=False,
+                    samples_to_visualize="cell-type",
+                    covariate=covar,
+                    plots=plots
+                )
             else:
-                plots = plot_heatmap_with_imshow(gene_symbols,cell_type,group_by=display_variables[0],cluster_rows=True,
-                        cluster_columns=True,show_individual_cells=show_individual_cells,median_scale_expression=False,
-                        samples_to_visualize="cell-type",covariate=disease,plots=plots)
+                plots = plot_heatmap_with_imshow(
+                    gene_symbols,
+                    cell_type,
+                    group_by=display_variables[0],
+                    cluster_rows=True,
+                    cluster_columns=True,
+                    show_individual_cells=show_individual_cells,
+                    median_scale_expression=False,
+                    samples_to_visualize="cell-type",
+                    covariate=covar,
+                    plots=plots
+                )
 
-    if plot_type == 'heatmap' or plot_type == 'all':
+    elif plot_type == 'heatmap' or plot_type == 'all':
         for covariate in covariates:
-            if len(gene_symbols)<250 and heatmap_technology == 'seaborn':
-                plots = plot_heatmap(gene_symbols,cell_type,group_by=[cell_type_index],cluster_rows=True,
-                        cluster_columns=False,show_individual_cells=False,median_scale_expression=False,
-                        samples_to_visualize="all",covariate=covariate,plots=plots)
+            if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
+                plots = plot_heatmap(
+                    gene_symbols,
+                    cell_type,
+                    group_by=[cell_type_index],
+                    cluster_rows=True,
+                    cluster_columns=False,
+                    show_individual_cells=False,
+                    median_scale_expression=False,
+                    scaling_factor=0.3,  # Optional scaling factor
+                    samples_to_visualize="all",
+                    covariate=covariate,
+                    plots=plots
+                )
             else:
-                plots = plot_heatmap_with_imshow(gene_symbols,cell_type,group_by=cell_type_index,cluster_rows=True,
-                        cluster_columns=False,show_individual_cells=False,median_scale_expression=False,
-                        samples_to_visualize="all",covariate=covariate,plots=plots)
+                plots = plot_heatmap_with_imshow(
+                    gene_symbols,
+                    cell_type,
+                    group_by=cell_type_index,
+                    cluster_rows=True,
+                    cluster_columns=True,
+                    show_individual_cells=False,
+                    median_scale_expression=True,  # Use median scaling for large heatmaps
+                    samples_to_visualize="all",
+                    covariate=covariate,
+                    plots=plots
+                )
+
 
     if plot_type == 'radar' or plot_type == 'all':
-        output_pdf=f"{root}/{disease}-radar_cell_frequency.pdf"
-        plots = plot_aggregated_cell_frequencies_radar(covariate_index,donor_index,cell_type_index,output_pdf=output_pdf,plots=plots)
+        output_pdf = sanitize_filename(f"{root}/{disease}-radar_cell_frequency.pdf")
+        plots = plot_aggregated_cell_frequencies_radar(
+            covariate_index,
+            donor_index,
+            cell_type_index,
+            output_pdf=output_pdf,
+            plots=plots
+        )
 
     if plot_type == 'cell_frequency' or plot_type == 'all':
-        plots = plot_cell_type_frequency_per_donor(control_group=covariates[0],plots=plots)
+        plots = plot_cell_type_frequency_per_donor(control_group=covariates[0], plots=plots)
 
     if plot_type == 'volcano' or plot_type == 'all':
-        plots = plot_volcano(cell_type,disease,gene_symbols,plots=plots)
+        plots = plot_volcano(cell_type, disease, gene_symbols, plots=plots)
 
     if plot_type == 'dotplot' or plot_type == 'all':
         # Capture the return value here
@@ -457,16 +517,23 @@ def main(json_input, output_dir="results"):
             dis = display_variables[0]
         else:
             dis = None
-        plots = plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=dis, plots=plots)
+        plots = plot_gene_violin(
+            gene_symbol,
+            cell_type,
+            covariates,
+            covariate_index,
+            alt_covariate_index=dis,
+            plots=plots
+        )
 
     if plot_type == 'venn' or plot_type == 'all':
-        if len(cell_types_to_compare)<4:
-            plots = compare_marker_genes_and_plot_venn(cell_types_to_compare,plots=plots)
+        if len(cell_types_to_compare) < 4:
+            plots = compare_marker_genes_and_plot_venn(cell_types_to_compare, plots=plots)
         else:
-            plots = compare_marker_genes_and_plot_upset(cell_types_to_compare,plots=plots)
+            plots = compare_marker_genes_and_plot_upset(cell_types_to_compare, plots=plots)
 
     if plot_type == 'upset_genes' or plot_type == 'all':
-        plots = compare_marker_genes_and_plot_upset(cell_types_to_compare,plots=plots)
+        plots = compare_marker_genes_and_plot_upset(cell_types_to_compare, plots=plots)
 
     if plot_type in ['umap', 'all']:
         # Extract relevant variables for UMAP from JSON configuration
@@ -495,9 +562,9 @@ def main(json_input, output_dir="results"):
         plots.extend(umap_plots)
 
     if plot_type == 'network' or plot_type == 'all':
-        output_file = f"{root}/{cell_type}_{disease}_{n_genes}_{direction}-network.pdf"
+        output_file = sanitize_filename(f"{root}/{cell_type}_{disease}_{n_genes}_{direction}-network.pdf")
         #if network_technology == "igraph":
-        plots = visualize_gene_network_igraph(gene_symbols,output_file=output_file,plots=plots)
+        plots = visualize_gene_network_igraph(gene_symbols, output_file=output_file, plots=plots)
         #else:
             #plots = visualize_gene_networkX(gene_symbols,output_file=output_file,plots=plots)
 
@@ -605,7 +672,7 @@ def h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes):
         return gene_symbols, gene_symbols
 
 # Grahing functions
-def plot_cell_type_frequency_per_donor(control_group='control',plots=[]):
+def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
     """ 
     Produce a box and whisker plot displaying cell frequency by donor (not cells or metacells)
     for disease annotated groups, technology, ethnicity or other variables and assess statisitcal
@@ -702,8 +769,8 @@ def plot_cell_type_frequency_per_donor(control_group='control',plots=[]):
             jitter=True,
             marker=marker,
             alpha=0.7,
-            size=1,
-            linewidth=0.5,
+            size=1,  # Decrease dot size
+            linewidth=0.5,  # Remove edge color
             palette=custom_palette,
             ax=ax,
         )
@@ -755,8 +822,8 @@ def plot_cell_type_frequency_per_donor(control_group='control',plots=[]):
                     })
 
     # Convert export data to DataFrame and save as tab-delimited text file
+    concise_export_filename = sanitize_filename(f"{root}/cell_frequency_comparisons_summary.tsv")
     concise_export_df = pd.DataFrame(export_data)
-    concise_export_filename = f"{root}/cell_frequency_comparisons_summary.tsv"
     concise_export_df.to_csv(concise_export_filename, sep='\t', index=False)
 
     # Add a combined legend for disease groups and sex
@@ -776,20 +843,23 @@ def plot_cell_type_frequency_per_donor(control_group='control',plots=[]):
         loc='upper left',
     )
 
-    output_pdf = f"{root}/cell_type_frequencies_per_donor_boxplot_sig.pdf"
+    # Save plots with sanitized filenames
+    output_pdf = sanitize_filename(f"{root}/cell_type_frequencies_per_donor_boxplot_sig.pdf")
     plt.title('Frequency of Cell Types Across Donors by Disease Condition')
     plt.xlabel('Cell Type')
     plt.ylabel('Frequency (%)')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(output_pdf)
-    plt.savefig(output_pdf.replace("pdf","png"), dpi=250)
+    plt.savefig(output_pdf, bbox_inches='tight', dpi=300)
+    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches='tight', dpi=250)
     plt.close()
 
+    # Append to plots
     plots.append([output_pdf, description])
-    plots.append([output_pdf.replace("pdf","png"), description])
+    plots.append([sanitize_filename(output_pdf.replace("pdf","png")), description])
     plots.append([concise_export_filename, description])
     return plots
+
 
 def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=None,plots=[]):
     """
@@ -876,10 +946,10 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     plt.xticks(rotation=45)
 
     # Save the plot
-    pdf_filename = f"{root}/{gene_symbol}_{cell_type}_violin_plot.pdf"
+    pdf_filename = sanitize_filename(f"{root}/{gene_symbol}_{cell_type}_violin_plot.pdf")
     plt.tight_layout()
     plt.savefig(pdf_filename, bbox_inches="tight", dpi=250)
-    plt.savefig(pdf_filename.replace("pdf","png"), bbox_inches="tight", dpi=250)
+    plt.savefig(sanitize_filename(pdf_filename.replace("pdf", "png")), bbox_inches="tight", dpi=250)
     plt.close()
     plots.append([pdf_filename, description])
     plots.append([pdf_filename.replace("pdf","png"), description])
@@ -1113,8 +1183,8 @@ def plot_heatmap(
         )
 
     # Save
-    output_pdf = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
-    output_png = output_pdf.replace(".pdf", ".png")
+    output_pdf = sanitize_filename(f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf")
+    output_png = sanitize_filename(output_pdf.replace(".pdf", ".png"))
     g.savefig(output_pdf, bbox_inches="tight", dpi=150)
     g.savefig(output_png, bbox_inches="tight", dpi=150)
     plt.close()
@@ -1333,8 +1403,8 @@ def plot_heatmap_with_imshow(
     )
 
     # Save
-    output_pdf = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf"
-    output_png = output_pdf.replace(".pdf", ".png")
+    output_pdf = sanitize_filename(f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf")
+    output_png = sanitize_filename(output_pdf.replace(".pdf", ".png"))
     plt.savefig(output_pdf, dpi=250, bbox_inches="tight")
     plt.savefig(output_png, dpi=250, bbox_inches="tight")
     plt.close()
@@ -1344,9 +1414,6 @@ def plot_heatmap_with_imshow(
     plots.append([output_png, description])
 
     return plots
-
-
-
 
 def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=(12, 8), plots=[]):
     """
@@ -1362,11 +1429,11 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     sc.settings.figdir = root
 
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {cell_type} cells by {group_by}"
-    output_file = f"expression_{cell_type}_{group_by}.pdf"  # Base file name
+    output_file = sanitize_filename(f"expression_{cell_type}_{group_by}.pdf")  # Sanitized base file name
 
     # Subset the data for the specified cell type
     subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
-    
+
     # If gene_symbols is not a list, convert it
     if not isinstance(gene_symbols, list):
         gene_symbols = gene_symbols["Gene"].tolist()
@@ -1396,12 +1463,13 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     )
 
     # Append updated file paths to the plots list with 'dotplot_' prefix
-    actual_pdf = f"{root}/dotplot_{output_file}"  # Expect Scanpy's prefix
-    actual_png = f"{root}/dotplot_{output_file.replace('pdf','png')}"
+    actual_pdf = sanitize_filename(f"{root}/dotplot_{output_file}")
+    actual_png = sanitize_filename(f"{root}/dotplot_{output_file.replace('pdf','png')}")
     plots.append([actual_pdf, description])
     plots.append([actual_png, description])
 
     return plots
+
 
 def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 8), color_map="Blues", plots=[]):
     """
@@ -1417,11 +1485,11 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     sc.settings.figdir = root
 
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
-    output_file = f"expression_all-cell_types_{covariate}.pdf"  # Base file name
+    output_file = sanitize_filename(f"expression_all-cell_types_{covariate}.pdf")  # Sanitized base file name
 
     # Subset the data for the specified covariate
     subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
-    
+
     # If gene_symbols is not a list, convert it
     if not isinstance(gene_symbols, list):
         gene_symbols = gene_symbols["Gene"].tolist()
@@ -1453,14 +1521,96 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     )
 
     # Append updated file paths to the plots list with 'dotplot_' prefix
-    actual_pdf = f"{root}/dotplot_{output_file}"  # Expect Scanpy's prefix
-    actual_png = f"{root}/dotplot_{output_file.replace('pdf','png')}"
+    actual_pdf = sanitize_filename(f"{root}/dotplot_{output_file}")
+    actual_png = sanitize_filename(f"{root}/dotplot_{output_file.replace('pdf','png')}")
     plots.append([actual_pdf, description])
     plots.append([actual_png, description])
 
     return plots
 
- 
+def plot_volcano(
+    cell_type,
+    covariate,
+    gene_symbols,
+    figsize=(12, 8),
+    top_n=8,
+    plots=[]
+):
+    """
+    Create a volcano plot from precomputed statistics in gene_symbols.
+
+    Parameters:
+    - gene_symbols: DataFrame containing genes and associated statistics.
+        Must include 'Gene', 'Log Fold Change', and 'FDR-Corrected P-Value'.
+    - figsize: Tuple defining the size of the plot (default: (12, 8)).
+    - top_n: Number of top genes to highlight (positive and negative).
+    - plots: List to append generated file paths and descriptions.
+
+    Returns:
+    - Updated plots list.
+    """
+    
+    description = f"Volcano plot of top differentially expressed genes for {cell_type} cells in {covariate} vs. control cells (study specific aggregated)"
+    output_file = sanitize_filename(f"{root}/volcano_{cell_type}_{covariate}.pdf")
+
+    # Ensure required columns exist in gene_symbols
+    required_columns = ['Gene', 'Log Fold Change', 'FDR-Corrected P-Value']
+    if not all(col in gene_symbols.columns for col in required_columns):
+        raise ValueError(f"gene_symbols must contain the following columns: {', '.join(required_columns)}")
+
+    # Replace 0 p-values with a small value to avoid -inf in log transformation
+    gene_symbols['FDR-Corrected P-Value'] = gene_symbols['FDR-Corrected P-Value'].replace(0, 1e-270)
+    gene_symbols['-log10(FDR)'] = -np.log10(gene_symbols['FDR-Corrected P-Value'])
+
+    # Select top positive and negative genes
+    top_pos_genes = gene_symbols.nlargest(top_n, 'Log Fold Change')
+    top_neg_genes = gene_symbols.nsmallest(top_n, 'Log Fold Change')
+    top_genes = pd.concat([top_pos_genes, top_neg_genes]).drop_duplicates()
+
+    # Create the volcano plot
+    plt.figure(figsize=figsize)
+    plt.scatter(
+        gene_symbols['Log Fold Change'],
+        gene_symbols['-log10(FDR)'],
+        color='black',
+        label='All Genes'
+    )
+    plt.scatter(
+        top_genes['Log Fold Change'],
+        top_genes['-log10(FDR)'],
+        color='red',
+        s=50,
+        label='Top Genes'
+    )
+
+    for _, row in top_genes.iterrows():
+        plt.text(row['Log Fold Change'], row['-log10(FDR)'] + 0.4, row['Gene'], fontsize=10, color='red')
+
+    # Customize axes and labels
+    plt.xlabel('Log2(Fold Change)')
+    plt.ylabel('-Log10(FDR)')
+    plt.title('Volcano Plot: Top Positive and Negative Fold Changes')
+    plt.legend()
+
+    # Symmetric limits for fold change
+    fold_change_limit = max(abs(gene_symbols['Log Fold Change'].min()), gene_symbols['Log Fold Change'].max())
+    plt.xlim(-fold_change_limit - 0.5, fold_change_limit + 0.5)
+
+    # Adjust y-axis limits with padding
+    y_min, y_max = plt.ylim()
+    plt.ylim(y_min, y_max + 0.2 * y_max)
+
+    # Save the plot
+    plt.savefig(output_file, bbox_inches="tight", dpi=300)
+    plt.savefig(sanitize_filename(output_file.replace("pdf", "png")), bbox_inches="tight", dpi=300)
+    plt.close()
+
+    # Append the file paths to the plots list
+    plots.append([output_file, description])
+    plots.append([output_file.replace("pdf", "png"), description])
+
+    return plots
+
 def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
     from matplotlib_venn import venn2, venn3
     """
@@ -1476,7 +1626,7 @@ def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
     """
     
     description = "Weighted Venn diagram of top cell-type specific marker genes for selected cell types."
-    output_file = f"{root}/venn_ovelapping_markers.pdf"
+    output_file = sanitize_filename(f"{root}/venn_ovelapping_markers.pdf")
 
     if "marker_stats" not in adata.uns:
         raise ValueError("Marker statistics are not available in the AnnData object. Run marker gene identification first.")
@@ -1529,7 +1679,7 @@ def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
         export_data[f"Unique to {cell_types_to_compare[2]}"] = list(unique_3)
 
     # Convert export_data to a DataFrame and save to a tab-delimited text file
-    output_tsv = output_file.replace("pdf","tsv")
+    output_tsv = sanitize_filename(output_file.replace("pdf","tsv"))
     export_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in export_data.items()]))
     export_df.to_csv(output_tsv, sep="\t", index=False)
     #print(f"Intersecting and unique genes exported to {output_tsv}")
@@ -1538,7 +1688,7 @@ def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
     # Save the Venn diagram to a PDF
     plt.title("Weighted Venn Diagram of Marker Genes")
     plt.savefig(output_file, bbox_inches="tight")
-    plt.savefig(output_file.replace("pdf","png"), bbox_inches="tight")
+    plt.savefig(sanitize_filename(output_file.replace("pdf", "png")), bbox_inches="tight")
     plt.close()
     plots.append([output_file, description])
     plots.append([output_file.replace("pdf","png"), description])
@@ -1558,8 +1708,8 @@ def compare_marker_genes_and_plot_upset(cell_types,plots=[]):
     Returns:
     - None
     """
-    output_pdf=f"{root}/upset_cell-type_markers.pdf"
-    output_tsv=f"{root}/upset_cell-type_markers.tsv"
+    output_pdf = sanitize_filename(f"{root}/upset_cell-type_markers.pdf")
+    output_tsv = sanitize_filename(f"{root}/upset_cell-type_markers.tsv")
     description = "Upset plot of marker genes from different cell types."
 
     from upsetplot import UpSet, from_contents
@@ -1591,7 +1741,7 @@ def compare_marker_genes_and_plot_upset(cell_types,plots=[]):
     upset_plot.plot()
     plt.title("UpSet Diagram of Marker Genes")
     plt.savefig(output_pdf, bbox_inches="tight", dpi=150)
-    plt.savefig(output_pdf.replace("pdf","png"), bbox_inches="tight", dpi=150)
+    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches="tight", dpi=150)
     plt.close()
     #print(f"UpSet plot saved to {output_pdf}")
 
@@ -1742,8 +1892,9 @@ def plot_aggregated_cell_frequencies_radar(
     ax.set_rlim(0, 45)  # Increase the outer limit to make room for labels
     
     # Save plots with improved resolution and padding
+    output_pdf = sanitize_filename(output_pdf)
     plt.savefig(output_pdf, bbox_inches="tight", dpi=300, pad_inches=0.5)
-    plt.savefig(output_pdf.replace("pdf", "png"), bbox_inches="tight", dpi=300, pad_inches=0.5)
+    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches="tight", dpi=300, pad_inches=0.5)
     plt.close()
     plots.append([output_pdf, description])
     plots.append([output_pdf.replace("pdf","png"), description])
@@ -1755,7 +1906,7 @@ def visualize_gene_networkX(
     edge_types={"transcriptional_target": "red", "Arrow": "grey", "Tbar": "blue"},
     exclude_biogrid=True,
     figsize=(12, 12),  # Reduced figure size
-    output_file="networkX_interactions.pdf",
+    output_file = sanitize_filename("networkX_interactions.pdf"),
     plots=[]
 ):
     import networkx as nx
