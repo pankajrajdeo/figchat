@@ -65,6 +65,7 @@ You can generate the following plot types:
 - UMAP Plots
 - Heatmaps
 - Violin Plots
+- Volcano Plots
 - Dot Plots
 - Cell Frequency Boxplots
 - Gene Interaction Networks
@@ -112,17 +113,19 @@ async def on_chat_start():
     cl.user_session.set("react_graph", react_graph)
     cl.user_session.set("config", config)
     await cl.Message(
-        content=(
+        content=(  
             "Welcome to LungMAP scExplore, an agent-based AI framework to generate advanced single-cell genomics data visualizations through conversation. How can I assist you today?\n\n"
             "Here are some example queries to get you started:\n\n"
             "1. What are you and what can you do?\n"
             "2. Show me detailed metadata for the HLCA scRNA-seq dataset.\n"
             "3. Show me a UMAP of IPF, COPD, and healthy controls with expression of SFTPC.\n"
             "4. Show me a dot plot of AT2 marker genes in AT2 cells.\n"
-            "5. Show me a heatmap of AT2 cell marker gene expression in ILD.\n"
-            "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma.\n"
-            "7. Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as an Upset plot.\n"
-            "8. Show me a gene regulatory network of pulmonary fibrosis DEGs in adventitial fibroblasts.\n\n"
+            "5. Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as an Upset plot.\n"
+            "6. Show me a heatmap of AT2 cell marker gene expression in ILD.\n"
+            "7. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma.\n"
+            "8. Show me a heatmap of macrophage DEGs in IPF in Kaminski 2020.\n"
+            "9. Show me a volcano plot of AT2 Cells in pulmonary fibrosis.\n"
+            "10. Show me a gene regulatory network of pulmonary fibrosis DEGs in adventitial fibroblasts.\n\n"
             "**Note:**\n"
             "1. Plot generation and detailed description generation may take a minute or two. Please wait while it is being generated.\n"
             "2. In case the session gets stuck, please click on the notepad icon in the upper corner."
