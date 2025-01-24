@@ -155,18 +155,18 @@ deg_check_prompt = ChatPromptTemplate.from_messages(
 ).partial(format_instructions=degcheck_parser.get_format_instructions())
 
 # Utility
-PRELOADED_DATASET_INDEX = None
-from preload_datasets import DATASET_INDEX_FILE
+PRELOADED_ = None
+from preload_datasets import _FILE
 
 def get_dataset_metadata() -> str:
-    global PRELOADED_DATASET_INDEX, DATASET_INDEX_FILE
-    if PRELOADED_DATASET_INDEX is None:
-        PRELOADED_DATASET_INDEX = parse_tsv_data(DATASET_INDEX_FILE)
+    global PRELOADED_, _FILE
+    if PRELOADED_ is None:
+        PRELOADED_ = parse_tsv_data(_FILE)
     # Check if it's a DataFrame and convert if necessary
-    if isinstance(PRELOADED_DATASET_INDEX, pd.DataFrame):
-        data_to_dump = PRELOADED_DATASET_INDEX.to_dict(orient='list')
+    if isinstance(PRELOADED_, pd.DataFrame):
+        data_to_dump = PRELOADED_.to_dict(orient='list')
     else:
-        data_to_dump = PRELOADED_DATASET_INDEX
+        data_to_dump = PRELOADED_
     return json.dumps(data_to_dump, indent=4)
 
 def run_workflow1(user_query: str) -> Workflow1Model:
@@ -254,11 +254,6 @@ def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict
         "notes": all_metadata.get("notes", {})
     }
     return filtered
-
-####################################
-# Constants
-####################################
-DATASET_INDEX_FILE = "/data/aronow/pankaj/FigChat/datasets/dataset_index_advanced_paths.tsv"
 
 ####################################
 # Workflow 3
