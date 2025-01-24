@@ -136,7 +136,7 @@ Differential Expression Metadata:
 User Query:
 {user_query}
 
-Based on the DEG metadata, determine if DEGs exist for the specified disease and cell type combination in the user query. 
+Based on the DEG metadata, look very carefully at each field and determine if DEGs exist for the specified disease and cell type combination in the user query. 
 If DEGs exist, output:
 - "deg_existence": true
 Otherwise, output:
@@ -256,6 +256,11 @@ def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict
     return filtered
 
 ####################################
+# Constants
+####################################
+DATASET_INDEX_FILE = "/data/aronow/pankaj/FigChat/datasets/dataset_index_advanced_paths.tsv"
+
+####################################
 # Workflow 3
 ####################################
 THIRD_PROMPT_TEMPLATE = """\
@@ -282,10 +287,11 @@ User Query (Refined):
      - Correct "AGER1" to "AGER" if "AGER" is valid.
      - Resolve "interstitial lung diseases" to "interstitial lung disease" based on the metadata.
    - Disambiguate ambiguous terms using context and metadata.
-
+   
 3. **Generate Valid JSON:**
    - Return a JSON object that conforms exactly to the schema of the correct Pydantic class for "{plot_type}" in the codebase.
    - Exclude irrelevant or optional fields, unless specified in the user query or metadata.
+   - Make sure the file name you provide ends with .h5ad
 
 4. **Strict Adherence to Schema:**
    - Use the correct field names, types, and defaults based on both the dataset metadata and the Pydantic model schema.
@@ -442,6 +448,7 @@ def visualization_tool(user_query: str) -> dict:
 
     # Define plot types for which image descriptions should be skipped
     skip_image_description_plots = {"dotplot", "heatmap", "violin", "umap", "venn", "upset_genes", "network", "radar", "cell_frequency", "volcano"}
+
 
     # 2) Check if the plot type requires a DEG existence check
     if w1_result.plot_type in specified_plots:
