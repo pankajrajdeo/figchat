@@ -13,3 +13,7 @@ igraph
 networkx
 duckduckgo-search
 langgraph-checkpoint-sqlite
+matplotlib_venn
+upsetplot
+circos
+pycairo
