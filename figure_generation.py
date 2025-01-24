@@ -499,15 +499,17 @@ def main(json_input, output_dir="results"):
         plots = plot_dot_plot_celltype(
             gene_symbols, cell_type, group_by=covariate_index, plots=plots
         )
-        if covariates is None:
+        if direction != "markers":
             # Also capture the return value here
             plots = plot_dot_plot_all_celltypes(
                 gene_symbols, color_map='Reds', plots=plots
             )
         else:
-            for covariate in covariates:
+            # Generate plot for only one covariate if direction == "markers"
+            if covariates:  # Ensure covariates list is not empty
+                selected_covariate = covariates[0]  # Choose the first covariate (or any logic to select)
                 plots = plot_dot_plot_all_celltypes(
-                    gene_symbols, covariate=covariate, color_map='Reds', plots=plots
+                    gene_symbols, covariate=selected_covariate, color_map='Reds', plots=plots
                 )
 
     if plot_type == 'violin' or plot_type == 'all':
