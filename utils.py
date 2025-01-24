@@ -623,8 +623,8 @@ class UmapPlotConfig(BaseModel):
     )
 
     # Maps to 'color_by' in main_visualizations
-    color_by: str = Field(
-        ...,
+    color_by: Optional[str] = Field(
+        None,
         description="Metadata column or gene to color the UMAP (e.g., 'celltype'). Defaults to 'celltype' if not provided, or another available field."
     )
     # Maps to 'cluster_by' in main_visualizations
