@@ -288,19 +288,20 @@ def main_visualizations(
         sub.replace(" ", "_").replace("+", "plus") for sub in subset_values
     ) if subset_values else "All"
     gene_suffix = f"_{'_'.join(gene_list)}" if gene_flag else ""
-    output_path_png = sanitize_filename(f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.png")
-    output_path_pdf = sanitize_filename(f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}.pdf")
+    base_name = f"{root}/{save_prefix}{gene_suffix}_{subset_values_str}_{output_suffix}"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
 
-    plt.savefig(output_path_png, bbox_inches='tight', dpi=300)
-    plt.savefig(output_path_pdf, bbox_inches='tight', dpi=300)
+    plt.savefig(pdf_path, bbox_inches='tight', dpi=300)
+    plt.savefig(png_path, bbox_inches='tight', dpi=300)
     plt.close()
 
     description = f"UMAP visualization colored by {color_column}"
     if subset_values:
         description += f" for {', '.join(subset_values)}"
 
-    generated_plots.append([output_path_pdf, description])
-    generated_plots.append([output_path_png, description])
+    generated_plots.append([pdf_path, description])
+    generated_plots.append([png_path, description])
 
     return generated_plots
 #########################################################################################################
@@ -324,8 +325,11 @@ def main(json_input, output_dir="results"):
     global variable1_index, variable2_index, variable3_index, variable4_index, gene_symbol
     global restrict_variable1, restrict_variable2, restrict_variable3, restrict_variable4
     global cell_types_to_compare
+    global root
 
-    root = output_dir
+   #root = output_dir 
+    root = output_dir.rstrip("/")
+    
     # Parse the JSON file
     with open(json_input, "r") as f:
         config = json.load(f)
@@ -477,14 +481,11 @@ def main(json_input, output_dir="results"):
                     plots=plots
                 )
 
-
     if plot_type == 'radar' or plot_type == 'all':
-        output_pdf = sanitize_filename(f"{root}/{disease}-radar_cell_frequency.pdf")
         plots = plot_aggregated_cell_frequencies_radar(
             covariate_index,
             donor_index,
             cell_type_index,
-            output_pdf=output_pdf,
             plots=plots
         )
 
@@ -564,11 +565,8 @@ def main(json_input, output_dir="results"):
         plots.extend(umap_plots)
 
     if plot_type == 'network' or plot_type == 'all':
-        output_file = sanitize_filename(f"{root}/{cell_type}_{disease}_{n_genes}_{direction}-network.pdf")
-        #if network_technology == "igraph":
-        plots = visualize_gene_network_igraph(gene_symbols, output_file=output_file, plots=plots)
-        #else:
-            #plots = visualize_gene_networkX(gene_symbols,output_file=output_file,plots=plots)
+        base_name = sanitize_filename(f"{root}/{cell_type}_{disease}_{n_genes}_{direction}-network")
+        plots = visualize_gene_network_igraph(gene_symbols, base_name=base_name, plots=plots)
 
     end_time = time.time()  # End the timer
     #print(f"Execution time: {end_time - start_time:.2f} seconds")
@@ -590,7 +588,6 @@ def h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes):
     - List of selected gene symbols (unique, sorted by p-value).
     """
     ##print([gene_symbols, direction, cell_type, disease])
-    
     if len(gene_symbols) == 0 and direction is not None:
         if direction == 'markers':
             if "marker_stats" not in adata.uns:
@@ -677,10 +674,10 @@ def h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes):
 def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
     """ 
     Produce a box and whisker plot displaying cell frequency by donor (not cells or metacells)
-    for disease annotated groups, technology, ethnicity or other variables and assess statisitcal
-    differences within cell types. Denote male and female differences
+    for disease annotated groups, technology, ethnicity, or other variables, and assess statistical
+    differences within cell types. Denote male and female differences.
     """
-
+    global root
     description = 'Cell frequency barchart by donor with mannwhitneyu differences to control'
 
     # Group by cell type, disease, and donor
@@ -700,50 +697,31 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
 
     # Merge and map sex information
     if sex_index is None:
-        # Set sex to 'unknown' for all donors
         adata.obs[local_sex_index] = 'unknown'
     else:
-        # Use the provided sex_index
         adata.obs[local_sex_index] = adata.obs[sex_index]
 
-    # Create donor_sex_map
     donor_sex_map = (
         adata.obs[[donor_index, local_sex_index]]
-        .drop_duplicates(subset=donor_index)  # Ensure donor_id is unique
+        .drop_duplicates(subset=donor_index)
         .set_index(donor_index)[local_sex_index]
     )
 
-    # Replace 'unknown' with NaN to exclude these from analysis or plot them distinctly
     adata.obs[local_sex_index] = adata.obs[local_sex_index].replace('unknown', np.nan)
     merged_df = pd.merge(
         cell_type_counts_per_donor, total_cells_per_donor_condition, on=[covariate_index, donor_index]
     )
     merged_df[local_sex_index] = merged_df[donor_index].map(donor_sex_map)
-
-    # Debugging: #print unique values in 'sex'
-    #print(f"Unique values in adata.obs['{local_sex_index}']: {adata.obs[local_sex_index].unique()}")
-    #print(f"Unique values in merged_df['{local_sex_index}'] before filtering: {merged_df[local_sex_index].unique()}")
-
-    # Exclude rows with NaN in 'sex'
     merged_df = merged_df.dropna(subset=[local_sex_index])
 
-    # Debugging: #print shape and head of merged DataFrame
-    #print(f"Final merged DataFrame (shape): {merged_df.shape}")
-    #print(f"Final merged DataFrame (head):\n{merged_df.head()}")
-
-    # Calculate frequency percentages
     merged_df['Frequency (%)'] = (merged_df['count'] / merged_df['total']) * 100
 
     # Define a custom color palette
-    # Dynamically generate a palette matching the number of covariates
     num_categories = len(covariates)
     custom_palette = sns.color_palette("Paired", n_colors=num_categories)
 
-    # Ensure the control group is the first category
     ordered_covariates = [control_group] + [group for group in covariates if group != control_group]
-    #print(f"Ordered sample groups: {ordered_covariates}")
 
-    # Plot boxplots with adjusted outlier size
     flierprops = {'marker': 'o', 'markersize': 4, 'color': 'black'}
     plt.figure(figsize=(16, 10))
     ax = sns.boxplot(
@@ -755,11 +733,10 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
         palette=custom_palette,
         linewidth=0.5,
         showfliers=False,
-        hue_order=ordered_covariates,  # Set the control group as the first category
+        hue_order=ordered_covariates,
         flierprops=flierprops,
     )
 
-    # Plot male, female, and unknown samples with different markers and adjusted size
     markers = {'male': 'v', 'female': 'o', 'unknown': 's'}
     for sex, marker in markers.items():
         sns.stripplot(
@@ -771,13 +748,12 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
             jitter=True,
             marker=marker,
             alpha=0.7,
-            size=1,  # Decrease dot size
-            linewidth=0.5,  # Remove edge color
+            size=1,
+            linewidth=0.5,
             palette=custom_palette,
             ax=ax,
         )
 
-    # Statistical testing: Compare each disease group to the control group
     for i, cell_type in enumerate(merged_df[cell_type_index].unique()):
         control_data = merged_df[
             (merged_df[cell_type_index] == cell_type) & (merged_df[covariate_index] == control_group)
@@ -788,7 +764,6 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
                 disease_data = merged_df[
                     (merged_df[cell_type_index] == cell_type) & (merged_df[covariate_index] == disease)
                 ]['Frequency (%)'].dropna()
-                # Ensure both groups have non-empty data
                 if len(control_data) > 0 and len(disease_data) > 0:
                     stat, p_value = mannwhitneyu(control_data, disease_data)
                     if p_value < 0.01:
@@ -800,7 +775,6 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
                         ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.5, color='black')
                         ax.text(i, y + h + 0.5, '*', ha='center', va='bottom', color='black', fontsize=15)
 
-    # Prepare concise data for export
     export_data = []
     for cell_type in merged_df[cell_type_index].unique():
         control_data = merged_df[
@@ -823,12 +797,10 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
                         'P-Value': p_value
                     })
 
-    # Convert export data to DataFrame and save as tab-delimited text file
     concise_export_filename = sanitize_filename(f"{root}/cell_frequency_comparisons_summary.tsv")
     concise_export_df = pd.DataFrame(export_data)
     concise_export_df.to_csv(concise_export_filename, sep='\t', index=False)
 
-    # Add a combined legend for disease groups and sex
     handles, labels = ax.get_legend_handles_labels()
     unique_disease_handles = handles[:len(covariates)]
     unique_disease_labels = labels[:len(covariates)]
@@ -845,25 +817,26 @@ def plot_cell_type_frequency_per_donor(control_group='control', plots=[]):
         loc='upper left',
     )
 
-    # Save plots with sanitized filenames
-    output_pdf = sanitize_filename(f"{root}/cell_type_frequencies_per_donor_boxplot_sig.pdf")
+    base_name = f"{root}/cell_type_frequencies_per_donor_boxplot_sig"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+
     plt.title('Frequency of Cell Types Across Donors by Disease Condition')
     plt.xlabel('Cell Type')
     plt.ylabel('Frequency (%)')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(output_pdf, bbox_inches='tight', dpi=300)
-    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches='tight', dpi=250)
+    plt.savefig(pdf_path, bbox_inches='tight', dpi=300)
+    plt.savefig(png_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-    # Append to plots
-    plots.append([output_pdf, description])
-    plots.append([sanitize_filename(output_pdf.replace("pdf","png")), description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
     plots.append([concise_export_filename, description])
     return plots
 
 
-def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=None,plots=[]):
+def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_covariate_index=None, plots=[]):
     """
     Plot a violin plot of gene expression for specified covariates, with an optional
     alternative covariate index for coloring (e.g., assays).
@@ -875,7 +848,7 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     - covariate_index: The primary index (e.g., disease conditions).
     - alt_covariate_index: The optional alternative index for coloring (e.g., assay type).
     """
-    
+    global root
     description = "Violin plot for a single gene in a single-cell type across conditions with possible confounding variables (optional)"
     covars = [cov for cov in covariates if cov is not None]  # Remove None values
 
@@ -883,7 +856,6 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     adata_subset = adata[adata.obs[cell_type_index].isin([cell_type]) & adata.obs[covariate_index].isin(covars)].copy()
 
     if adata_subset.shape[0] == 0:
-        #print(f"No data found for cell type '{cell_type}' and specified covariates.")
         return
 
     # Ensure proper ordering for the main covariate
@@ -891,7 +863,6 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
 
     # Extract expression data for the gene
     if gene_symbol not in adata_subset.var_names:
-        #print(f"Gene {gene_symbol} not found in adata.var_names. Available examples: {adata_subset.var_names[:5]}")
         return
 
     gene_expression = adata_subset[:, gene_symbol].X.toarray().flatten()
@@ -909,7 +880,6 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     # Overlay scatter plot for individual data points, colored by alt_covariate_index if provided
     if alt_covariate_index:
         if alt_covariate_index not in adata_subset.obs:
-            #print(f"Alternative covariate index '{alt_covariate_index}' not found in adata.obs.")
             return
 
         # Map alternative covariates to unique colors
@@ -947,14 +917,20 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     plt.ylabel("Expression")
     plt.xticks(rotation=45)
 
-    # Save the plot
-    pdf_filename = sanitize_filename(f"{root}/{gene_symbol}_{cell_type}_violin_plot.pdf")
+    # Save the plot using updated filename logic
+    base_name = f"{root}/{gene_symbol}_{cell_type}_violin_plot"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+
     plt.tight_layout()
-    plt.savefig(pdf_filename, bbox_inches="tight", dpi=250)
-    plt.savefig(sanitize_filename(pdf_filename.replace("pdf", "png")), bbox_inches="tight", dpi=250)
+    plt.savefig(pdf_path, bbox_inches="tight", dpi=250)
+    plt.savefig(png_path, bbox_inches="tight", dpi=250)
     plt.close()
-    plots.append([pdf_filename, description])
-    plots.append([pdf_filename.replace("pdf","png"), description])
+
+    # Append file paths to the plots list
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+
     return plots
 
 
@@ -972,6 +948,7 @@ def plot_heatmap(
     covariate=None,
     plots=[]
 ):
+    global root
     description = f"lustered cell-type ({samples_to_visualize}) seaborn heatmap by {group_by[0]} with show_individual_cells {show_individual_cells} median scaling {median_scale_expression} for covariate {covariate}"
     if cluster_columns:
         description = "C" + description
@@ -1185,15 +1162,16 @@ def plot_heatmap(
         )
 
     # Save
-    output_pdf = sanitize_filename(f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf")
-    output_png = sanitize_filename(output_pdf.replace(".pdf", ".png"))
-    g.savefig(output_pdf, bbox_inches="tight", dpi=150)
-    g.savefig(output_png, bbox_inches="tight", dpi=150)
+    base_name = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+
+    g.savefig(pdf_path, bbox_inches="tight", dpi=150)
+    g.savefig(png_path, bbox_inches="tight", dpi=150)
     plt.close()
 
-    # Append both to plots
-    plots.append([output_pdf, description])
-    plots.append([output_png, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
 
     return plots
 
@@ -1214,7 +1192,7 @@ def plot_heatmap_with_imshow(
     """
     Generates a heatmap using matplotlib without seaborn to reduce file size (rasterized heatmap image).
     """
-
+    global root
     description = f"lustered cell-type ({samples_to_visualize}) seaborn heatmap by {group_by[0]} with show_individual_cells {show_individual_cells} median scaling {median_scale_expression} for covariate {covariate}"
     if cluster_columns:
         description = "C" + description
@@ -1405,15 +1383,16 @@ def plot_heatmap_with_imshow(
     )
 
     # Save
-    output_pdf = sanitize_filename(f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}.pdf")
-    output_png = sanitize_filename(output_pdf.replace(".pdf", ".png"))
-    plt.savefig(output_pdf, dpi=250, bbox_inches="tight")
-    plt.savefig(output_png, dpi=250, bbox_inches="tight")
+    base_name = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+
+    plt.savefig(pdf_path, dpi=250, bbox_inches="tight")
+    plt.savefig(png_path, dpi=250, bbox_inches="tight")
     plt.close()
 
-    # Append both to plots
-    plots.append([output_pdf, description])
-    plots.append([output_png, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
 
     return plots
 
@@ -1428,10 +1407,11 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     - figsize: Tuple defining the size of the plot.
     - plots: List to store generated plot file paths and descriptions.
     """
+    global root
+    # Tell Scanpy to save plots to the `root` directory
     sc.settings.figdir = root
 
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {cell_type} cells by {group_by}"
-    output_file = sanitize_filename(f"expression_{cell_type}_{group_by}.pdf")  # Sanitized base file name
 
     # Subset the data for the specified cell type
     subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
@@ -1444,34 +1424,37 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # Generate the dot plot (PDF)
+    # We give Scanpy just a filename, not a full path:
+    pdf_filename = sanitize_filename(f"dotplot_{cell_type}_{group_by}.pdf")
+    png_filename = pdf_filename.replace(".pdf", ".png")
+
+    # Now call Scanpy dotplot with `save=<filename>`, not a full path
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=group_by,
         figsize=figsize,
-        show=False,  # Do not display interactively
-        save=output_file,  # Let Scanpy save the plot
+        show=False,
+        save=pdf_filename
     )
-
-    # Generate the dot plot (PNG)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=group_by,
         figsize=figsize,
-        show=False,  # Do not display interactively
-        save=output_file.replace("pdf", "png"),  # Let Scanpy save the plot
+        show=False,
+        save=png_filename
     )
 
-    # Append updated file paths to the plots list with 'dotplot_' prefix
-    actual_pdf = sanitize_filename(f"{root}/dotplot_{output_file}")
-    actual_png = sanitize_filename(f"{root}/dotplot_{output_file.replace('pdf','png')}")
-    plots.append([actual_pdf, description])
-    plots.append([actual_png, description])
+    # Because Scanpy writes those files into `root/` automatically,
+    # we build the final absolute paths to store in `plots`.
+    final_pdf_path = os.path.join(root, pdf_filename)
+    final_png_path = os.path.join(root, png_filename)
+
+    plots.append([final_pdf_path, description])
+    plots.append([final_png_path, description])
 
     return plots
-
 
 def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 8), color_map="Blues", plots=[]):
     """
@@ -1484,10 +1467,11 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     - color_map: The color map to use for the plot.
     - plots: List to store generated plot file paths and descriptions.
     """
+    global root
+    # Tell Scanpy to save plots to the `root` directory
     sc.settings.figdir = root
 
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
-    output_file = sanitize_filename(f"expression_all-cell_types_{covariate}.pdf")  # Sanitized base file name
 
     # Subset the data for the specified covariate
     subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
@@ -1500,33 +1484,35 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # Generate the dot plot (PDF)
+    # Again, give Scanpy a filename not a full path
+    pdf_filename = sanitize_filename(f"dotplot_all_celltypes_{covariate}.pdf")
+    png_filename = pdf_filename.replace(".pdf", ".png")
+
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=cell_type_index,
         figsize=figsize,
         color_map=color_map,
-        show=False,  # Do not display interactively
-        save=output_file,  # Let Scanpy save the plot
+        show=False,
+        save=pdf_filename
     )
-
-    # Generate the dot plot (PNG)
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=cell_type_index,
         figsize=figsize,
         color_map=color_map,
-        show=False,  # Do not display interactively
-        save=output_file.replace("pdf", "png"),  # Let Scanpy save the plot
+        show=False,
+        save=png_filename
     )
 
-    # Append updated file paths to the plots list with 'dotplot_' prefix
-    actual_pdf = sanitize_filename(f"{root}/dotplot_{output_file}")
-    actual_png = sanitize_filename(f"{root}/dotplot_{output_file.replace('pdf','png')}")
-    plots.append([actual_pdf, description])
-    plots.append([actual_png, description])
+    # Build absolute file paths for final return
+    final_pdf_path = os.path.join(root, pdf_filename)
+    final_png_path = os.path.join(root, png_filename)
+
+    plots.append([final_pdf_path, description])
+    plots.append([final_png_path, description])
 
     return plots
 
@@ -1551,9 +1537,11 @@ def plot_volcano(
     Returns:
     - Updated plots list.
     """
-    
+    global root
     description = f"Volcano plot of top differentially expressed genes for {cell_type} cells in {covariate} vs. control cells (study specific aggregated)"
-    output_file = sanitize_filename(f"{root}/volcano_{cell_type}_{covariate}.pdf")
+    base_name = f"{root}/volcano_{cell_type}_{covariate}"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
 
     # Ensure required columns exist in gene_symbols
     required_columns = ['Gene', 'Log Fold Change', 'FDR-Corrected P-Value']
@@ -1603,126 +1591,128 @@ def plot_volcano(
     plt.ylim(y_min, y_max + 0.2 * y_max)
 
     # Save the plot
-    plt.savefig(output_file, bbox_inches="tight", dpi=300)
-    plt.savefig(sanitize_filename(output_file.replace("pdf", "png")), bbox_inches="tight", dpi=300)
+    plt.savefig(pdf_path, bbox_inches="tight", dpi=300)
+    plt.savefig(png_path, bbox_inches="tight", dpi=300)
     plt.close()
 
-    # Append the file paths to the plots list
-    plots.append([output_file, description])
-    plots.append([output_file.replace("pdf", "png"), description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
 
     return plots
 
-def compare_marker_genes_and_plot_venn(cell_types,plots=[]):
+def compare_marker_genes_and_plot_venn(cell_types, plots=[]):
     from matplotlib_venn import venn2, venn3
     """
-    Retrieve marker genes for specified cell types and plot a weighted Venn diagram
+    Retrieve marker genes for specified cell types and plot a Venn diagram
     showing overlap of marker genes. Saves the Venn diagram to a PDF.
-
+    
     Parameters:
     - cell_types: List of 2 or 3 cell type names to compare.
-    - output_pdf: Path to save the Venn diagram.
-
-    Returns:
-    - None
-    """
+    - plots: List to append plot information.
     
-    description = "Weighted Venn diagram of top cell-type specific marker genes for selected cell types."
-    output_file = sanitize_filename(f"{root}/venn_ovelapping_markers.pdf")
-
+    Returns:
+    - plots: Updated list with new plot paths and descriptions.
+    """
+    global root
+    description = "Venn diagram of top cell-type specific marker genes for selected cell types."
+    base_name = f"{root}/venn_overlapping_markers"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+    tsv_path = sanitize_filename(base_name + ".tsv")
+    
     if "marker_stats" not in adata.uns:
         raise ValueError("Marker statistics are not available in the AnnData object. Run marker gene identification first.")
-
+    
     # Retrieve marker statistics DataFrame
     marker_stats_df = adata.uns["marker_stats"]
-
+    
     # Ensure valid cell types are provided
     available_cell_types = marker_stats_df["Cell Population"].unique()
     for cell_type in cell_types:
         if cell_type not in available_cell_types:
             raise ValueError(f"Cell type '{cell_type}' not found in marker statistics. Available types: {available_cell_types}")
-
+    
     # Retrieve marker genes for each cell type
     marker_genes = {}
     for cell_type in cell_types:
         genes = marker_stats_df[marker_stats_df["Cell Population"] == cell_type]["Gene"].tolist()
         marker_genes[cell_type] = set(genes)
-
+    
     # Create a Venn diagram based on the number of cell types
     plt.figure(figsize=(8, 6))
     if len(cell_types) == 2:
-        venn = venn2([marker_genes[cell_types[0]], marker_genes[cell_types[1]]], set_labels=cell_types)
+        venn_diagram = venn2([marker_genes[cell_types[0]], marker_genes[cell_types[1]]], set_labels=cell_types)
     elif len(cell_types) == 3:
-        venn = venn3([marker_genes[cell_types[0]], marker_genes[cell_types[1]], marker_genes[cell_types[2]]], set_labels=cell_types)
+        venn_diagram = venn3([marker_genes[cell_types[0]], marker_genes[cell_types[1]], marker_genes[cell_types[2]]], set_labels=cell_types)
     else:
         raise ValueError("Only 2 or 3 cell types can be compared for a Venn diagram.")
-
+    
     # Export intersecting and unique genes
     export_data = {}
-
-    if len(cell_types_to_compare) == 2:
-        intersect = marker_genes[cell_types_to_compare[0]] & marker_genes[cell_types_to_compare[1]]
-        unique_1 = marker_genes[cell_types_to_compare[0]] - marker_genes[cell_types_to_compare[1]]
-        unique_2 = marker_genes[cell_types_to_compare[1]] - marker_genes[cell_types_to_compare[0]]
-
+    
+    if len(cell_types) == 2:
+        intersect = marker_genes[cell_types[0]] & marker_genes[cell_types[1]]
+        unique_1 = marker_genes[cell_types[0]] - marker_genes[cell_types[1]]
+        unique_2 = marker_genes[cell_types[1]] - marker_genes[cell_types[0]]
+    
         export_data["Intersect"] = list(intersect)
-        export_data[f"Unique to {cell_types_to_compare[0]}"] = list(unique_1)
-        export_data[f"Unique to {cell_types_to_compare[1]}"] = list(unique_2)
-
-    elif len(cell_types_to_compare) == 3:
-        intersect_all = marker_genes[cell_types_to_compare[0]] & marker_genes[cell_types_to_compare[1]] & marker_genes[cell_types_to_compare[2]]
-        unique_1 = marker_genes[cell_types_to_compare[0]] - marker_genes[cell_types_to_compare[1]] - marker_genes[cell_types_to_compare[2]]
-        unique_2 = marker_genes[cell_types_to_compare[1]] - marker_genes[cell_types_to_compare[0]] - marker_genes[cell_types_to_compare[2]]
-        unique_3 = marker_genes[cell_types_to_compare[2]] - marker_genes[cell_types_to_compare[0]] - marker_genes[cell_types_to_compare[1]]
-
+        export_data[f"Unique to {cell_types[0]}"] = list(unique_1)
+        export_data[f"Unique to {cell_types[1]}"] = list(unique_2)
+    
+    elif len(cell_types) == 3:
+        intersect_all = marker_genes[cell_types[0]] & marker_genes[cell_types[1]] & marker_genes[cell_types[2]]
+        unique_1 = marker_genes[cell_types[0]] - marker_genes[cell_types[1]] - marker_genes[cell_types[2]]
+        unique_2 = marker_genes[cell_types[1]] - marker_genes[cell_types[0]] - marker_genes[cell_types[2]]
+        unique_3 = marker_genes[cell_types[2]] - marker_genes[cell_types[0]] - marker_genes[cell_types[1]]
+    
         export_data["Intersect All"] = list(intersect_all)
-        export_data[f"Unique to {cell_types_to_compare[0]}"] = list(unique_1)
-        export_data[f"Unique to {cell_types_to_compare[1]}"] = list(unique_2)
-        export_data[f"Unique to {cell_types_to_compare[2]}"] = list(unique_3)
-
+        export_data[f"Unique to {cell_types[0]}"] = list(unique_1)
+        export_data[f"Unique to {cell_types[1]}"] = list(unique_2)
+        export_data[f"Unique to {cell_types[2]}"] = list(unique_3)
+    
     # Convert export_data to a DataFrame and save to a tab-delimited text file
-    output_tsv = sanitize_filename(output_file.replace("pdf","tsv"))
-    export_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in export_data.items()]))
-    export_df.to_csv(output_tsv, sep="\t", index=False)
-    #print(f"Intersecting and unique genes exported to {output_tsv}")
-    plots.append([output_tsv, description])
-
-    # Save the Venn diagram to a PDF
-    plt.title("Weighted Venn Diagram of Marker Genes")
-    plt.savefig(output_file, bbox_inches="tight")
-    plt.savefig(sanitize_filename(output_file.replace("pdf", "png")), bbox_inches="tight")
-    plt.close()
-    plots.append([output_file, description])
-    plots.append([output_file.replace("pdf","png"), description])
+    export_df = pd.DataFrame({k: pd.Series(v) for k, v in export_data.items()})
+    export_df.to_csv(tsv_path, sep="\t", index=False)
+    
+    # Append plot paths and descriptions to the plots list
+    plots.append([tsv_path, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+    
     return plots
 
-def compare_marker_genes_and_plot_upset(cell_types,plots=[]):
+def compare_marker_genes_and_plot_upset(cell_types, plots=[]):
     """
     Retrieve marker genes for specified cell types and plot an UpSet diagram
     showing overlap of marker genes. Saves the UpSet plot to a PDF and exports
     overlapping marker gene data to a text file.
 
     Parameters:
-    - cell_types: List of cell type names to compare.
-    - output_pdf: Path to save the UpSet diagram (default: "upset_cell-type_markers.pdf").
-    - output_txt: Path to save the overlapping marker gene data (default: "upset_cell-type_markers.txt").
-
-    Returns:
-    - None
-    """
-    output_pdf = sanitize_filename(f"{root}/upset_cell-type_markers.pdf")
-    output_tsv = sanitize_filename(f"{root}/upset_cell-type_markers.tsv")
-    description = "Upset plot of marker genes from different cell types."
-
-    from upsetplot import UpSet, from_contents
+    - cell_types: List of 2 or 3 cell type names to compare.
+    - plots: List to append plot information.
     
+    Returns:
+    - plots: Updated list with new plot paths and descriptions.
+    """
+    global root
+    from upsetplot import UpSet, from_contents
+
+    # Define a meaningful description for the UpSet plot
+    description = "UpSet plot of top cell-type specific marker genes for selected cell types."
+
+    base_name = f"{root}/upset_cell-type_markers"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+    tsv_path = sanitize_filename(base_name + ".tsv")
+
+    # Check for marker statistics in AnnData
     if "marker_stats" not in adata.uns:
         raise ValueError("Marker statistics are not available in the AnnData object. Run marker gene identification first.")
 
     # Retrieve marker statistics DataFrame
     marker_stats_df = adata.uns["marker_stats"]
 
-    # Ensure valid cell types are provided
+    # Ensure all specified cell types are present in the marker stats
     available_cell_types = marker_stats_df["Cell Population"].unique()
     for cell_type in cell_types:
         if cell_type not in available_cell_types:
@@ -1742,33 +1732,51 @@ def compare_marker_genes_and_plot_upset(cell_types,plots=[]):
     upset_plot = UpSet(upset_data, show_counts=True, sort_categories_by=None)
     upset_plot.plot()
     plt.title("UpSet Diagram of Marker Genes")
-    plt.savefig(output_pdf, bbox_inches="tight", dpi=150)
-    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches="tight", dpi=150)
+    plt.savefig(pdf_path, bbox_inches="tight", dpi=150)
+    plt.savefig(png_path, bbox_inches="tight", dpi=150)
     plt.close()
-    #print(f"UpSet plot saved to {output_pdf}")
 
     # Export intersecting and unique genes
     export_data = {}
     for cell_type, genes in marker_genes.items():
         export_data[f"Unique to {cell_type}"] = list(genes)
     
-    intersect_all = set.intersection(*marker_genes.values())
-    export_data["Intersect All"] = list(intersect_all)
+    if len(cell_types) == 2:
+        intersect = marker_genes[cell_types[0]] & marker_genes[cell_types[1]]
+        unique_1 = marker_genes[cell_types[0]] - marker_genes[cell_types[1]]
+        unique_2 = marker_genes[cell_types[1]] - marker_genes[cell_types[0]]
+
+        export_data["Intersect"] = list(intersect)
+        export_data[f"Unique to {cell_types[0]}"] = list(unique_1)
+        export_data[f"Unique to {cell_types[1]}"] = list(unique_2)
+
+    elif len(cell_types) == 3:
+        intersect_all = marker_genes[cell_types[0]] & marker_genes[cell_types[1]] & marker_genes[cell_types[2]]
+        unique_1 = marker_genes[cell_types[0]] - marker_genes[cell_types[1]] - marker_genes[cell_types[2]]
+        unique_2 = marker_genes[cell_types[1]] - marker_genes[cell_types[0]] - marker_genes[cell_types[2]]
+        unique_3 = marker_genes[cell_types[2]] - marker_genes[cell_types[0]] - marker_genes[cell_types[1]]
+
+        export_data["Intersect All"] = list(intersect_all)
+        export_data[f"Unique to {cell_types[0]}"] = list(unique_1)
+        export_data[f"Unique to {cell_types[1]}"] = list(unique_2)
+        export_data[f"Unique to {cell_types[2]}"] = list(unique_3)
 
     # Convert export_data to a DataFrame and save to a tab-delimited text file
-    export_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in export_data.items()]))
-    export_df.to_csv(output_tsv, sep="\t", index=False)
-    #print(f"Intersecting and unique genes exported to {output_tsv}")
-    plots.append([output_tsv, description])
-    plots.append([output_pdf,description])
-    plots.append([output_pdf.replace("pdf","png"), description])
+    export_df = pd.DataFrame({k: pd.Series(v) for k, v in export_data.items()})
+    export_df.to_csv(tsv_path, sep="\t", index=False)
+
+    # Append plot paths and descriptions to the plots list
+    plots.append([tsv_path, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+
     return plots
+
 
 def plot_aggregated_cell_frequencies_radar(
     covariate_index,
     donor_index,
     cell_type_index,
-    output_pdf="radar_cell_frequency.pdf",
     plots=[]
 ):
     """
@@ -1777,11 +1785,10 @@ def plot_aggregated_cell_frequencies_radar(
     - covariate_index: Column name in `adata.obs` representing the grouping variable (e.g., disease).
     - donor_index: Column name in `adata.obs` representing the donor identifier.
     - cell_type_index: Column name in `adata.obs` representing the cell type.
-    - output_pdf: Path to save the radar plot (default: "radar_cell_frequency.pdf").
     Returns:
     - plots: List containing the output file paths and descriptions.
     """
-    
+    global root
     description = 'Radar plot of cell frequencies for different user-supplied conditions'
     
     # Data preparation code remains the same
@@ -1894,28 +1901,40 @@ def plot_aggregated_cell_frequencies_radar(
     ax.set_rlim(0, 45)  # Increase the outer limit to make room for labels
     
     # Save plots with improved resolution and padding
-    output_pdf = sanitize_filename(output_pdf)
-    plt.savefig(output_pdf, bbox_inches="tight", dpi=300, pad_inches=0.5)
-    plt.savefig(sanitize_filename(output_pdf.replace("pdf", "png")), bbox_inches="tight", dpi=300, pad_inches=0.5)
+    base_name = f"{root}/radar_cell_frequency"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+    
+    plt.savefig(pdf_path, bbox_inches="tight", dpi=300, pad_inches=0.5)
+    plt.savefig(png_path, bbox_inches="tight", dpi=300, pad_inches=0.5)
     plt.close()
-    plots.append([output_pdf, description])
-    plots.append([output_pdf.replace("pdf","png"), description])
+    
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+    
     return plots
-
 
 def visualize_gene_networkX(
     gene_symbols,
     edge_types={"transcriptional_target": "red", "Arrow": "grey", "Tbar": "blue"},
     exclude_biogrid=True,
     figsize=(12, 12),  # Reduced figure size
-    output_file = sanitize_filename("networkX_interactions.pdf"),
+    base_name=None,
     plots=[]
 ):
+    """
+    Plot the gene network using networkx.
+    """
+    global root
     import networkx as nx
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches  # For legend patches
 
     description = "networkX of user-indicated genes"
+
+    # If no base_name is provided, fall back to something using root:
+    if base_name is None:
+        base_name = f"{root}/networkX_interactions"
 
     # Check for interaction data
     if "interaction_data" not in adata.uns or adata.uns["interaction_data"].empty:
@@ -1925,7 +1944,8 @@ def visualize_gene_networkX(
 
     # Process gene_symbols input
     if isinstance(gene_symbols, list):
-        if gene_symbols and isinstance(gene_symbols[0], dict) and "Gene" in gene_symbols[0] and "Log Fold Change" in gene_symbols[0]:
+        if gene_symbols and isinstance(gene_symbols[0], dict) \
+           and "Gene" in gene_symbols[0] and "Log Fold Change" in gene_symbols[0]:
             gene_symbols = pd.DataFrame(gene_symbols)
         else:
             gene_symbols = pd.DataFrame({"Gene": gene_symbols, "Log Fold Change": [0] * len(gene_symbols)})
@@ -1994,31 +2014,38 @@ def visualize_gene_networkX(
     plt.tight_layout()  # Adjust layout
 
     # Sanitize filenames
-    output_file = sanitize_filename(output_file)
-    png_output = sanitize_filename(output_file.replace("pdf", "png"))
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
 
-    # Save PDF
-    plt.savefig(output_file, format="pdf", bbox_inches="tight")
-    # Save PNG
-    plt.savefig(png_output, format="png", bbox_inches="tight", dpi=150)
+    # Save PDF and PNG
+    plt.savefig(pdf_path, format="pdf", bbox_inches="tight")
+    plt.savefig(png_path, format="png", bbox_inches="tight", dpi=150)
     plt.close()
 
-    plots.append([output_file, description])
-    plots.append([png_output, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
     return plots
 
 def visualize_gene_network_igraph(
     gene_symbols,
     edge_types={"transcriptional_target": "red", "Arrow": "grey", "Tbar": "blue"},
     exclude_biogrid=True,
-    output_file="iGraph_gene_network.pdf",
+    base_name=None,
     plots=[]
 ):
+    """
+    Plot the gene network using iGraph.
+    """
+    global root
     from igraph import Graph, plot
     import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
 
     description = "iGraph network of user-indicated genes"
+
+    # If no base_name is provided, fall back to something using root:
+    if base_name is None:
+        base_name = f"{root}/iGraph_gene_network"
 
     # Check for interaction data
     if "interaction_data" not in adata.uns or adata.uns["interaction_data"].empty:
@@ -2028,7 +2055,8 @@ def visualize_gene_network_igraph(
 
     # Process gene_symbols input
     if isinstance(gene_symbols, list):
-        if gene_symbols and isinstance(gene_symbols[0], dict) and "Gene" in gene_symbols[0] and "Log Fold Change" in gene_symbols[0]:
+        if gene_symbols and isinstance(gene_symbols[0], dict) \
+           and "Gene" in gene_symbols[0] and "Log Fold Change" in gene_symbols[0]:
             gene_symbols = pd.DataFrame(gene_symbols)
         else:
             gene_symbols = pd.DataFrame({"Gene": gene_symbols, "Log Fold Change": [0] * len(gene_symbols)})
@@ -2086,13 +2114,13 @@ def visualize_gene_network_igraph(
     layout = g.layout("fr")  # Fruchterman-Reingold layout
 
     # Sanitize filenames
-    output_file = sanitize_filename(output_file)
-    png_file = sanitize_filename(output_file.replace("pdf", "png"))
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
 
     # Generate PDF output
     plot(
         g,
-        target=output_file,
+        target=pdf_path,
         layout=layout,
         vertex_size=20,
         bbox=(1300, 1300),
@@ -2104,7 +2132,7 @@ def visualize_gene_network_igraph(
     # Generate PNG output
     plot(
         g,
-        target=png_file,
+        target=png_path,
         layout=layout,
         vertex_size=20,
         bbox=(1300, 1300),
@@ -2114,7 +2142,7 @@ def visualize_gene_network_igraph(
     )
 
     # Overlay legend on PNG using matplotlib
-    img = plt.imread(png_file)
+    img = plt.imread(png_path)
     plt.figure(figsize=(12, 12))  # Adjusted figure size for PNG
     plt.imshow(img)
     plt.axis("off")
@@ -2128,12 +2156,13 @@ def visualize_gene_network_igraph(
     )
 
     # Save the overlaid PNG with adjusted DPI
-    plt.savefig(png_file, bbox_inches="tight", dpi=200)  # Adjusted DPI
+    plt.savefig(png_path, bbox_inches="tight", dpi=200)
     plt.close()
 
-    plots.append([output_file, description])
-    plots.append([png_file, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
     return plots
+
 
 if __name__ == '__main__':
 
