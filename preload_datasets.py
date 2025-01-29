@@ -1,4 +1,3 @@
-#preload_datasets.py
 import scanpy as sc
 import pandas as pd
 import sqlite3
@@ -20,6 +19,7 @@ BASE_DATASET_DIR = os.getenv("BASE_DATASET_DIR")
 PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
 DATASET_INDEX_FILE = os.getenv("DATASET_INDEX_FILE")
 DATABASE_PATH = os.getenv("DATABASE_PATH")
+TRAIN_DATA_FILE = os.getenv("TRAIN_DATA_FILE")
 
 def preload_dataset_index(file_path: str):
     global PRELOADED_DATASET_INDEX
