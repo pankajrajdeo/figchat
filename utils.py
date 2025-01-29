@@ -224,40 +224,6 @@ class BasePlotConfig(BaseModel):
         "all"
     ]
 
-    # Added restriction and variable index fields:
-    restrict_variable1: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable1."
-    )
-    variable1_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable1."
-    )
-    restrict_variable2: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable2."
-    )
-    variable2_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable2."
-    )
-    restrict_variable3: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable3."
-    )
-    variable3_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable3."
-    )
-    restrict_variable4: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable4."
-    )
-    variable4_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable4."
-    )
-
 ###############################################################################
 # 2. Plot-Specific Classes
 ###############################################################################
@@ -359,7 +325,15 @@ class HeatmapPlotConfig(BaseModel):
         ...,
         description="Mandatory list of grouping fields for aggregation/visualization derived from the 'Display Index' field of the dataset metadata."
     )
-
+    restrict_studies: Optional[List[str]] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    study_index: Optional[str] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    
     @root_validator(pre=True)
     def validate_fields(cls, values):
         diseases = values.get("disease")
@@ -396,6 +370,33 @@ class HeatmapPlotConfig(BaseModel):
             raise ValueError("display_variables must be provided and cannot be empty.")
 
         return values
+    
+    """"
+    restrict_variable2: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable2."
+    )
+    variable2_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable2."
+    )
+    restrict_variable3: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable3."
+    )
+    variable3_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable3."
+    )
+    restrict_variable4: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable4."
+    )
+    variable4_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable4."
+    )
+    """
 
 class RadarPlotConfig(BasePlotConfig):
     """
@@ -418,6 +419,14 @@ class RadarPlotConfig(BasePlotConfig):
     cell_type_index: str = Field(
         ...,
         description="Field in adata.obs representing the cell type."
+    )
+    restrict_studies: Optional[List[str]] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    study_index: Optional[str] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
 
 class CellFrequencyPlotConfig(BaseModel):
@@ -454,6 +463,15 @@ class CellFrequencyPlotConfig(BaseModel):
         ...,
         description="The obs field representing sex or gender annotations."
     )
+    restrict_studies: Optional[List[str]] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    study_index: Optional[str] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+
 
 class VolcanoPlotConfig(BasePlotConfig):
     """
@@ -524,6 +542,14 @@ class DotPlotConfig(BaseModel):
         ...,
         description="List of conditions (e.g., diseases) to filter by. This list must be non-empty. If not specified, list all the disease conditions in the metadata."
     )
+    restrict_studies: Optional[List[str]] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    study_index: Optional[str] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
 
 class ViolinPlotConfig(BaseModel):
     """
@@ -574,6 +600,40 @@ class ViolinPlotConfig(BaseModel):
         ...,
         description="Mandatory list of all the grouping fields for aggregation/visualization derived from the 'Display Index' field of the dataset metadata."
     )
+    restrict_studies: Optional[List[str]] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    study_index: Optional[str] = Field(
+        default=None,
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    )
+    """"
+    restrict_variable2: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable2."
+    )
+    variable2_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable2."
+    )
+    restrict_variable3: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable3."
+    )
+    variable3_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable3."
+    )
+    restrict_variable4: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of values to restrict on variable4."
+    )
+    variable4_index: Optional[str] = Field(
+        default=None,
+        description="Metadata column name corresponding to restrict_variable4."
+    )
+    """
 
 class VennPlotConfig(BasePlotConfig):
     """
@@ -697,7 +757,7 @@ PLOT_GUIDES = {
         "  - disease: Specify the condition or disease to filter by.\n"
         "Optional:\n"
         "  - n_genes: Number of top genes to export.\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     ),
     "heatmap": (
         "Heatmap or 'all' plot:\n"
@@ -707,19 +767,27 @@ PLOT_GUIDES = {
         "  - cell_type: A specific cell type to subset the data (must align with 'cell_type_index').\n"
         "  - cell_type_index: Column name representing cell types in adata.obs. Default is 'ann_finest_level'.\n"
         "  - covariate_index: Column name representing the main covariate (e.g., disease) in adata.obs. Default is 'disease'.\n"
-        " - direction: a variable describing whether to look at differentially expressed genes in disease vs control, either 'regulated', 'up', 'down' or to look at cell type specific 'markers' stored in the H5AD.\n"
+        "  - direction: A variable describing whether to look at differentially expressed genes in disease vs control, "
+        "               either 'regulated', 'up', 'down' or to look at cell type-specific 'markers' stored in the H5AD.\n"
         "  - covariates: A list of covariate values to filter cells. By default, this list should always start with \"normal\" "
-        "followed by the specified disease(s). For example, if the user specifies \"pulmonary fibrosis\", "
-        "the covariates should be [\"normal\", \"pulmonary fibrosis\"].\n"
+        "                followed by the specified disease(s). For example, if the user specifies \"pulmonary fibrosis\", "
+        "                the covariates should be [\"normal\", \"pulmonary fibrosis\"].\n"
         "  - show_individual_cells: Whether to show individual cells (True) or aggregate data by median (False). Default is True.\n"
         "  - cluster_rows / cluster_columns: Enable hierarchical clustering on rows (genes) or columns (groups). Defaults are True.\n"
         "  - median_scale_expression: Normalize expression data by subtracting the median across genes (row-wise). Default is False.\n"
         "  - heatmap_technology: Rendering technology ('seaborn' or 'imshow'). Default is 'seaborn'.\n"
         "  - samples_to_visualize: Specify 'cell-type' to subset by a single cell type or 'all' for all cells. Default is 'cell-type'.\n"
-        "  - display_variables: A mandatory list of grouping fields for aggregation or visualization. This is dynamically derived\n"
-        "                       from the dataset's metadata and must be explicitly provided.\n"
+        "  - display_variables: A mandatory list of grouping fields for aggregation or visualization. These fields align with the user query "
+        "                       and are derived dynamically from the dataset's metadata. If no fields are explicitly provided by the user, "
+        "                       default grouping fields from the 'Display Index' in the metadata will be used.\n"
         "\nOptional:\n"
         "  - covariate: A single covariate value for filtering (deprecated; use 'covariates' instead).\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
         "\nNotes:\n"
         "  - Ensure 'covariates' align with values in 'covariate_index'.\n"
         "  - Verify 'cell_type' matches entries in 'cell_type_index'.\n"
@@ -727,8 +795,11 @@ PLOT_GUIDES = {
         "  - Default indices ('cell_type_index' and 'covariate_index') can be overridden if necessary.\n"
         "  - If 'covariates' results in an empty subset after filtering, this may cause errors. Validate input parameters accordingly.\n"
         "  - Always provide 'display_variables', as it is essential for defining grouping fields.\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - The 'restrict_studies' and 'study_index' parameters allow you to filter the dataset to specific studies using metadata columns. "
+        "    If the dataset is HLCA and the user has not specified another study or studies to restrict to, use 'restrict_studies = [\"Sun_2020\"]' and "
+        "    ensure 'study_index = \"study\"'. For datasets other than HLCA, these parameters should be set to `null`.\n"
     ),
+
     "radar": (
         "Radar or 'all' plot:\n"
         "Shows average cell-type frequencies across conditions in a radial plot.\n"
@@ -739,7 +810,12 @@ PLOT_GUIDES = {
         "Optional fields:\n"
         "  - disease: Specific disease condition used for filtering data.\n"
         "  - covariates: List of covariate values to filter the dataset.\n"
-        "   - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "cell_frequency": (
         "Cell Frequency or 'all' plot:\n"
@@ -753,7 +829,12 @@ PLOT_GUIDES = {
         "Note:\n"
         "  - Ensure `adata_file` contains the required `obs` fields specified above.\n"
         "Optional fields:\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "volcano": (
         "Volcano or 'all' plot:\n"
@@ -765,7 +846,7 @@ PLOT_GUIDES = {
         "    This should correspond to a grouping variable present in the dataset, which distinguishes control vs. disease samples.\n"
         "Optional fields: \n" 
         "  - top_n=8 to highlight top genes.\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     ),
     "dotplot": (
         "Dotplot or 'all' plot:\n"
@@ -781,7 +862,12 @@ PLOT_GUIDES = {
         "  - covariate_index: Column in adata.obs representing covariates or experimental conditions for grouping (optional).\n"
         "  - cell_type_index: Column in adata.obs representing cell types (required for filtering and subsetting).\n"
         "Optional fields:\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "violin": (
         "Violin or 'all' plot:\n"
@@ -797,7 +883,12 @@ PLOT_GUIDES = {
         "                       from the dataset's metadata and must be explicitly provided.\n"
         "Optional fields:\n"
         "  - The first variable in the list **must** be covariate_index. The second variable, if provided, is used for alternative grouping or coloring.)\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "venn": (
         "Venn or 'all' plot:\n"
@@ -805,7 +896,7 @@ PLOT_GUIDES = {
         "Required field:\n"
         "  - cell_types_to_compare with length 2 or 3. Do not select the 'Unknown' cell type\n"
         "Optional fields:\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     ),
     "upset_genes": (
         "UpSet_Genes or 'all' plot:\n"
@@ -813,7 +904,7 @@ PLOT_GUIDES = {
         "Required field:\n"
         "  - cell_types_to_compare: list of cell types.\n"
         "Optional fields:\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     ),
     "umap": (
         "UMAP or 'all' plot:\n"
@@ -826,7 +917,7 @@ PLOT_GUIDES = {
         "  - color_by: Metadata column or gene to color the UMAP by. If color by parameter is not provided-By default color by cell type if the field is available or with any other available field..\n"
         "  - cell_type_index: Metadata column or gene to color the UMAP by. If the color_by parameter is not provided, it will default to coloring by cell type (if available) or by any other available field.\n"
         "  - gene: Gene name to visualize expression (overrides color_by if present).\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     ),
     "network": (
         "Network or 'all' plot:\n"
@@ -840,7 +931,6 @@ PLOT_GUIDES = {
         "  - n_genes: Number of top genes to use if gene_symbols is not provided (default=1000).\n"
         "  - disease: Condition used in the DE comparison for labeling.\n"
         "  - network_technology: 'igraph' or 'networkx' for graphing library selection (default 'igraph').\n"
-        "  - restrict_variable1...restrict_variable4 and variable1_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
     )
 
 }
