@@ -181,7 +181,7 @@ def main_visualizations(
                     show=False,
                     title=title_str,
                     legend_loc=None,  # No legend for gene expression
-                    cmap='viridis'
+                    cmap='YlOrRd'  # Changed from 'viridis' to 'YlOrRd'
                 )
 
                 # Add cluster numbers if cluster_by is provided
@@ -230,7 +230,7 @@ def main_visualizations(
                     show=False,
                     title=title_str,
                     legend_loc=None,
-                    cmap='viridis'
+                    cmap='YlOrRd'  # Changed from 'viridis' to 'YlOrRd'
                 )
                 if cluster_by and mapping:
                     for cluster in sub_adata.obs[cluster_by].unique():
@@ -322,8 +322,8 @@ def main(json_input, output_dir="results"):
     - output_dir: Directory to save the results.
     """
     global adata, cell_type_index, covariate_index, donor_index, sex_index, covariates, root
-    global variable1_index, variable2_index, variable3_index, variable4_index, gene_symbol
-    global restrict_variable1, restrict_variable2, restrict_variable3, restrict_variable4
+    global study_index, variable2_index, variable3_index, variable4_index, gene_symbol
+    global restrict_studies, restrict_variable2, restrict_variable3, restrict_variable4
     global cell_types_to_compare
     global root
 
@@ -341,11 +341,11 @@ def main(json_input, output_dir="results"):
     covariate_index = config.get("covariate_index", None)
     donor_index = config.get("donor_index", "donor")
     sex_index = config.get("sex_index", "sex")
-    variable1_index = config.get("variable1_index", None)
+    study_index = config.get("study_index", None)
     variable2_index = config.get("variable2_index", None)
     variable3_index = config.get("variable3_index", None)
     variable4_index = config.get("variable4_index", None)
-    restrict_variable1 = config.get("restrict_variable1", None)
+    restrict_studies = config.get("restrict_studies", None)
     restrict_variable2 = config.get("restrict_variable2", None)
     restrict_variable3 = config.get("restrict_variable3", None)
     restrict_variable4 = config.get("restrict_variable4", None)
@@ -379,9 +379,9 @@ def main(json_input, output_dir="results"):
         raise ValueError(f"{adata_file} not found in PRELOADED_DATA. Ensure it was preloaded.")
 
     # Apply variable restrictions
-    if restrict_variable1 and variable1_index:
-        ##print(f"Filtering {variable1_index} by {restrict_variable1}")
-        adata = adata[adata.obs[variable1_index].isin(restrict_variable1)].copy()
+    if restrict_studies and study_index:
+        ##print(f"Filtering {study_index} by {restrict_studies}")
+        adata = adata[adata.obs[study_index].isin(restrict_studies)].copy()
 
     if restrict_variable2 and variable2_index:
         #print(f"Filtering {variable2_index} by {restrict_variable2}")
@@ -400,6 +400,14 @@ def main(json_input, output_dir="results"):
         #print(f"Filtering by covariates: {covariates}")
         adata = adata[adata.obs[covariate_index].isin(covariates)].copy()
 
+    #removing covariates not present in the filetered data        
+    # if covariate_index in adata.obs:
+    #     print(f"Validating covariates in {covariate_index}...")
+    #     covariates = [cov for cov in covariates if cov in adata.obs[covariate_index].unique()]
+    #     if not covariates:
+    #         raise ValueError(f"No valid covariates found in {covariate_index}. Please check your input.")
+    #     print(f"Filtered valid covariates: {covariates}")
+
     # Import gene signatures from the h5ad
 
     if plot_type != 'venn' and plot_type != 'upset_genes':
@@ -412,14 +420,20 @@ def main(json_input, output_dir="results"):
         adata = adata[adata.obs[covariate_index].isin(covariates)].copy()
     else:
         #print(f"Disease index '{covariate_index}' not found in adata.obs")
-        covariate_index = variable1_index
+        covariate_index = study_index
 
     if plot_type == 'stats' or plot_type == 'all':
         output_file = sanitize_filename(f"{root}/Genes-{cell_type}_{disease}_{direction}.tsv")
         filtered_df.to_csv(output_file, sep="\t", index=False)
         plots.append([output_file, f"Differentially expressed {direction} genes in {cell_type} by {disease}"])
 
-    if (plot_type == 'heatmap' or plot_type == 'all') and direction != "markers":
+    heatmap_ran = False
+    if restrict_studies == None:
+        rs = ""
+    else:
+        rs = restrict_studies
+    if (plot_type == 'heatmap' or plot_type == 'all') and (direction != "markers" or len(rs)>0):
+        heatmap_ran = True
         if cell_type is not None and len(gene_symbols) > 0:
             # Determine the covariate based on direction
             covar = "markers" if direction == "markers" else disease
@@ -451,35 +465,36 @@ def main(json_input, output_dir="results"):
                     plots=plots
                 )
 
-    elif plot_type == 'heatmap' or plot_type == 'all':
-        for covariate in covariates:
-            if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
-                plots = plot_heatmap(
-                    gene_symbols,
-                    cell_type,
-                    group_by=[cell_type_index],
-                    cluster_rows=True,
-                    cluster_columns=False,
-                    show_individual_cells=False,
-                    median_scale_expression=False,
-                    scaling_factor=0.3,  # Optional scaling factor
-                    samples_to_visualize="all",
-                    covariate=covariate,
-                    plots=plots
-                )
-            else:
-                plots = plot_heatmap_with_imshow(
-                    gene_symbols,
-                    cell_type,
-                    group_by=cell_type_index,
-                    cluster_rows=True,
-                    cluster_columns=True,
-                    show_individual_cells=False,
-                    median_scale_expression=True,  # Use median scaling for large heatmaps
-                    samples_to_visualize="all",
-                    covariate=covariate,
-                    plots=plots
-                )
+    if plot_type == 'heatmap' or plot_type == 'all':
+        if (heatmap_ran == True and len(rs)>0) or (heatmap_ran == False): 
+            for covariate in covariates:
+                if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
+                    plots = plot_heatmap(
+                        gene_symbols,
+                        cell_type,
+                        group_by=[cell_type_index],
+                        cluster_rows=True,
+                        cluster_columns=False,
+                        show_individual_cells=False,
+                        median_scale_expression=False,
+                        scaling_factor=0.3,  # Optional scaling factor
+                        samples_to_visualize="all",
+                        covariate=covariate,
+                        plots=plots
+                    )
+                else:
+                    plots = plot_heatmap_with_imshow(
+                        gene_symbols,
+                        cell_type,
+                        group_by=cell_type_index,
+                        cluster_rows=True,
+                        cluster_columns=True,
+                        show_individual_cells=False,
+                        median_scale_expression=True,  # Use median scaling for large heatmaps
+                        samples_to_visualize="all",
+                        covariate=covariate,
+                        plots=plots
+                    )
 
     if plot_type == 'radar' or plot_type == 'all':
         plots = plot_aggregated_cell_frequencies_radar(
@@ -514,12 +529,26 @@ def main(json_input, output_dir="results"):
                 )
 
     if plot_type == 'violin' or plot_type == 'all':
+        # If you have multiple display variables, pick one
         if len(display_variables) > 1:
             dis = display_variables[1]
         elif len(display_variables) > 0:
             dis = display_variables[0]
         else:
             dis = None
+
+        # Now do your covariate validation only for violin
+        if covariate_index in adata.obs:
+            print(f"Validating covariates in {covariate_index} for violin plot...")
+            # Filter covariates to ensure they exist in the AnnData
+            covariates = [cov for cov in covariates if cov in adata.obs[covariate_index].unique()]
+            if not covariates:
+                raise ValueError(
+                    f"No valid covariates found in {covariate_index} for the violin plot. "
+                    f"Please check your input."
+                )
+            print(f"Filtered valid covariates: {covariates}")
+
         plots = plot_gene_violin(
             gene_symbol,
             cell_type,
@@ -528,6 +557,7 @@ def main(json_input, output_dir="results"):
             alt_covariate_index=dis,
             plots=plots
         )
+
 
     if plot_type == 'venn' or plot_type == 'all':
         if len(cell_types_to_compare) < 4:
