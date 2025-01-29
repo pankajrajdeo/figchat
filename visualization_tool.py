@@ -2,14 +2,18 @@
 import os
 import json
 import base64
+import threading  # Added for thread-safe logging
 from typing import Literal, Optional
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from utils import parse_tsv_data
-from preload_datasets import PLOT_OUTPUT_DIR
-from preload_datasets import DATASET_INDEX_FILE
+from preload_datasets import (
+    PLOT_OUTPUT_DIR,
+    DATASET_INDEX_FILE,
+    TRAIN_DATA_FILE
+)
 import matplotlib
 import logging
 from matplotlib import rcParams
@@ -23,6 +27,49 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
 # Set a default font family to avoid Arial warnings
 rcParams['font.family'] = 'DejaVu Sans'
+
+# -----------------------------
+# Logging Utility
+# -----------------------------
+
+# Initialize a lock for thread-safe file operations
+log_lock = threading.Lock()
+
+def load_log() -> dict:
+    """
+    Load the existing log from the TRAIN_DATA_FILE.
+    If the file doesn't exist, initialize with an empty structure.
+    """
+    if not os.path.exists(TRAIN_DATA_FILE):
+        return {"workflows": []}
+
+    try:
+        with open(TRAIN_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:  # Fix: Use "replace" for decoding errors
+            return json.load(f)
+    except json.JSONDecodeError:
+        # If the file is corrupted, reset it
+        return {"workflows": []}
+
+def append_log(workflow_name: str, prompt: str, response: str) -> None:
+    """
+    Append a new log entry to the TRAIN_DATA_FILE.
+    
+    Parameters:
+    - workflow_name: Name of the workflow (e.g., 'Workflow1').
+    - prompt: The prompt sent to the LLM.
+    - response: The response received from the LLM.
+    """
+    with log_lock:  # Ensure thread-safe access
+        log_data = load_log()
+        log_entry = {
+            "workflow": workflow_name,
+            "prompt": prompt,
+            "response": response,
+            "timestamp": pd.Timestamp.now().isoformat()
+        }
+        log_data["workflows"].append(log_entry)
+        with open(TRAIN_DATA_FILE, "w") as f:
+            json.dump(log_data, f, indent=4)
 
 # -----------------------------
 # Workflow 1: Dataset & Plot Selection
@@ -40,6 +87,8 @@ class Workflow1Model(BaseModel):
         "heatmap", "radar", "cell_frequency", "volcano", "stats",
         "dotplot", "violin", "venn", "upset_genes", "umap", "network"
     ]
+    is_marker_genes: bool  # New boolean field
+
 
 workflow1_parser = PydanticOutputParser(pydantic_object=Workflow1Model)
 
@@ -99,6 +148,9 @@ Based on the user's query and the available dataset metadata, perform the follow
         - Includes details like gene names, p-values, log fold changes, and associated metadata.
         - Use when the user requires a structured summary of DEGs for downstream analysis or validation.
 
+3. **Marker Genes Detection:**
+   - Determine if the user's query specifically mentions "marker genes."
+
 Dataset Metadata:
 {dataset_metadata}
 
@@ -115,6 +167,45 @@ workflow1_prompt = ChatPromptTemplate.from_messages(
         ("human", "{user_query}")
     ]
 ).partial(format_instructions=workflow1_parser.get_format_instructions())
+
+PRELOADED_DATASET_INDEX = None
+from preload_datasets import DATASET_INDEX_FILE
+
+def get_dataset_metadata() -> str:
+    global PRELOADED_DATASET_INDEX, DATASET_INDEX_FILE
+    if PRELOADED_DATASET_INDEX is None:
+        PRELOADED_DATASET_INDEX = parse_tsv_data(DATASET_INDEX_FILE)
+    # Check if it's a DataFrame and convert if necessary
+    if isinstance(PRELOADED_DATASET_INDEX, pd.DataFrame):
+        data_to_dump = PRELOADED_DATASET_INDEX.to_dict(orient='list')
+    else:
+        data_to_dump = PRELOADED_DATASET_INDEX
+    return json.dumps(data_to_dump, indent=4)
+
+def run_workflow1(user_query: str) -> Workflow1Model:
+    dataset_metadata_str = get_dataset_metadata()
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    chain = workflow1_prompt | model | workflow1_parser
+    
+    # Format the prompt
+    prompt_input = {
+        "user_query": user_query,
+        "dataset_metadata": dataset_metadata_str
+    }
+    formatted_prompt = workflow1_prompt.format(**prompt_input)
+    
+    # Invoke the chain and get the response
+    result: Workflow1Model = chain.invoke(prompt_input)
+    
+    # Log the interaction
+    append_log(
+        workflow_name="Workflow1",
+        prompt=formatted_prompt,
+        response=result.model_dump_json()
+    )
+    
+    return result
+
 
 # -----------------------------
 # Workflow 2: DEG Existence Confirmation
@@ -143,6 +234,8 @@ Otherwise, output:
 - "deg_existence": false
 Include any suggestions or alternative options if DEGs do not exist.
 
+**Note**: Whenever cell type markers are mentioned, only confirm that the cell type exists and ignore any disease fields for DEGs.
+
 Your output should be a JSON object adhering to this schema:
 {format_instructions}
 """
@@ -153,31 +246,6 @@ deg_check_prompt = ChatPromptTemplate.from_messages(
         ("human", "{user_query}")
     ]
 ).partial(format_instructions=degcheck_parser.get_format_instructions())
-
-# Utility
-PRELOADED_ = None
-from preload_datasets import _FILE
-
-def get_dataset_metadata() -> str:
-    global PRELOADED_, _FILE
-    if PRELOADED_ is None:
-        PRELOADED_ = parse_tsv_data(_FILE)
-    # Check if it's a DataFrame and convert if necessary
-    if isinstance(PRELOADED_, pd.DataFrame):
-        data_to_dump = PRELOADED_.to_dict(orient='list')
-    else:
-        data_to_dump = PRELOADED_
-    return json.dumps(data_to_dump, indent=4)
-
-def run_workflow1(user_query: str) -> Workflow1Model:
-    dataset_metadata_str = get_dataset_metadata()
-    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
-    chain = workflow1_prompt | model | workflow1_parser
-    result: Workflow1Model = chain.invoke({
-        "user_query": user_query,
-        "dataset_metadata": dataset_metadata_str
-    })
-    return result
 
 def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: str) -> DEGCheckModel:
     # Parse metadata to extract DEG information for the selected dataset
@@ -194,12 +262,18 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
 
     model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
     chain = deg_check_prompt | model | degcheck_parser
-    result: DEGCheckModel = chain.invoke({
+    
+    # Prepare the prompt input
+    prompt_input = {
         "user_query": user_query,
         "dataset_name": selected_dataset,
         "deg_metadata": deg_metadata
-    })
-
+    }
+    formatted_prompt = deg_check_prompt.format(**prompt_input)
+    
+    # Invoke the chain and get the response
+    result: DEGCheckModel = chain.invoke(prompt_input)
+    
     # Post-process suggestion
     if result.deg_existence:
         result.suggestion = None
@@ -211,14 +285,21 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
             )
         else:
             result.suggestion = "No DEG information available for the selected dataset."
+    
+    # Log the interaction
+    append_log(
+        workflow_name="Workflow2",
+        prompt=formatted_prompt,
+        response=result.model_dump_json()
+    )
+    
     return result
 
 specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  # Plot types that require DEG check
 
-###############################################################################
-# Code 2: Workflow 3 (UNMODIFIED Prompt Template, Classes, Logic), plus local
-# definition for get_single_dataset_metadata to avoid ImportError.
-###############################################################################
+# -----------------------------
+# Workflow 3: Plot Configuration
+# -----------------------------
 import os
 import json
 from langchain_openai import ChatOpenAI
@@ -255,12 +336,11 @@ def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict
     }
     return filtered
 
-####################################
-# Workflow 3
-####################################
 THIRD_PROMPT_TEMPLATE = """\
 You are a plot configuration assistant. The user wants to create a "{plot_type}". 
 Your role is to generate a valid JSON configuration for the selected plot type by accurately interpreting the dataset metadata and correcting any errors in the user query.
+
+Dataset Name: {dataset_name}
 
 Here is a description of how this plot type works and what arguments it needs:
 
@@ -276,23 +356,29 @@ User Query (Refined):
 
 ### Your Task:
 1. **Use Dataset Metadata:** Explicitly match field names and values to the metadata provided. If a user-provided value does not match, look for the closest valid match in the metadata (e.g., correcting "capilary" to "CAP1" if "CAP1" is valid in the metadata).
-   
+
 2. **Correct Misspellings and Resolve Ambiguities:**
    - Correct gene names, disease names, and other terms using your internal knowledge. For example:
      - Correct "AGER1" to "AGER" if "AGER" is valid.
      - Resolve "interstitial lung diseases" to "interstitial lung disease" based on the metadata.
    - Disambiguate ambiguous terms using context and metadata.
-   
-3. **Generate Valid JSON:**
+
+3. **Derive Restrict Variables:**
+   - Analyze the dataset metadata to identify fields that can be used as **restrict variables**.
+   - Restrict variables are used to filter data for plotting and may include fields such as `study`, `sex`, `age`, `tissue`, `disease`, or other categorical variables.
+   - Ensure the index field is present in the dataset metadata specified in the query. (e.g., if the user specifies a study by first author, you need to determine the correct study name from the metadata.)
+   - Include valid restrict variables as part of the JSON configuration.
+
+4. **Generate Valid JSON:**
    - Return a JSON object that conforms exactly to the schema of the correct Pydantic class for "{plot_type}" in the codebase.
    - Exclude irrelevant or optional fields, unless specified in the user query or metadata.
    - Make sure the file name you provide ends with .h5ad
 
-4. **Strict Adherence to Schema:**
+5. **Strict Adherence to Schema:**
    - Use the correct field names, types, and defaults based on both the dataset metadata and the Pydantic model schema.
    - Only include fields relevant to "{plot_type}" from the code base.
 
-5. **Output Format:**
+6. **Output Format:**
    - Provide your output as a JSON object, unwrapped by Markdown formatting.
    - If a correction or adjustment is made, ensure the final JSON reflects the valid and corrected configuration.
 
@@ -329,9 +415,13 @@ def get_plot_class(plot_type: str):
 
 def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str) -> str:
     """
-    Takes a dataset name, chosen plot type, and refined query to produce a single PlotConfig JSON,
-    ready for figure_generation.py. This function wraps the Workflow 3 logic.
+    Generates the configuration for a plot based on the dataset, plot type, and refined query.
+    Includes conditional logic for handling restrict_studies and study_index for specific plot types.
     """
+    # Validate dataset_name
+    if not dataset_name:
+        raise ValueError("Dataset name is required but not provided to Workflow 3.")
+
     # 1) Load only the relevant metadata for the chosen dataset
     all_metadata = parse_tsv_data(DATASET_INDEX_FILE)
     single_dataset_metadata = get_single_dataset_metadata(all_metadata, dataset_name)
@@ -354,8 +444,10 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
         format_instructions=parser.get_format_instructions()
     )
 
+    # Add the dataset_name to the prompt formatting
     prompt_text = prompt_template.format(
         plot_type=plot_type,
+        dataset_name=dataset_name,  # Include the dataset name here
         plot_description=plot_description,
         dataset_metadata=dataset_metadata_str,
         refined_query=refined_query
@@ -368,11 +460,12 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     result_config = chain.invoke({
         "refined_query": refined_query,
         "dataset_metadata": dataset_metadata_str,
+        "dataset_name": dataset_name,  # Pass the dataset name dynamically
         "plot_description": plot_description,
         "plot_type": plot_type
     })
 
-    # Attempt to map the adata file path
+    # Map the `adata_file` path and apply hardcoded logic for specific plot types
     ADATA_FILE_PATH_MAP = {
         "HLCA_full_superadata_v3_norm_log_deg.h5ad": "/reference-data/figchat_datasets/HLCA_full_superadata_v3_norm_log_deg/HLCA_full_superadata_v3_norm_log_deg.h5ad",
         "HCA_fetal_lung_normalized_log_deg.h5ad": "/reference-data/figchat_datasets/HCA_fetal_lung_normalized_log_deg/HCA_fetal_lung_normalized_log_deg.h5ad",
@@ -387,53 +480,74 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     else:
         raise ValueError(f"Unknown adata_file: {adata_file_name}. Please add it to the mapping.")
 
-    # Convert the resulting pydantic model to valid JSON
+    # Hardcoded logic for specific plot types and dataset
+    if plot_type in {"dotplot", "cell_frequency", "radar", "violin", "heatmap"}:
+        if adata_file_name == "HLCA_full_superadata_v3_norm_log_deg.h5ad":
+            # For HLCA_full_superadata_v3_norm_log_deg.h5ad, use default values unless overridden by user
+            if result_config.restrict_studies is None:
+                result_config.restrict_studies = ["Sun_2020"]
+            if result_config.study_index is None:
+                result_config.study_index = "study"
+        else:
+            # For other datasets, ensure these fields are null
+            result_config.restrict_studies = None
+            result_config.study_index = None
+
+    # Convert the resulting Pydantic model to valid JSON
     final_json = result_config.model_dump_json(indent=4)
+    
+    # Log the interaction
+    append_log(
+        workflow_name="Workflow3",
+        prompt=prompt_text,  # Assuming prompt_text contains the full prompt
+        response=final_json
+    )
+    
     return final_json
 
-###############################################################################
+# -----------------------------
 # Workflow 4: Image Description Generator
-###############################################################################
+# -----------------------------
+
 def generate_image_description(image_path: str, plot_type: str) -> str:
-    """
-    Generates a description of the image using the existing prompt, dynamically including the plot type.
-
-    Parameters:
-    - image_path: Path to the image file.
-    - plot_type: Type of the plot (e.g., 'heatmap', 'volcano', etc.).
-
-    Returns:
-    - Description of the image as a string.
-    """
     from langchain_core.messages import HumanMessage
     with open(image_path, "rb") as img_file:
         image_data = base64.b64encode(img_file.read()).decode("utf-8")
 
-    # Add plot_type to the prompt without changing the core template
-    message = HumanMessage(
-        content=[
-            {"type": "text", "text": f"""
+    prompt_content = f"""
 Provide a detailed description of the image, covering EACH AND EVERY textual and visual element comprehensively. The image represents a '{plot_type}' plot.
 Summarize the overall structure and highlight key features such as cluster shapes, patterns, gradients, axes, legends, and titles. Describe trends, notable regions, or transitions, and explain how visual elements like colors relate to metadata (e.g., 'cell_type').
 
 Use clear and concise language, appropriate for computational biologists, to explain terms like 'clusters' and 'dimensionality reduction.' Ensure the description flows logically, starting with an overview, diving into specific details, and concluding with interpretations of visual patterns and their potential biological relevance. NOTE: WRITE DETAIL ABOUT EACH AND EVERY CELL TYPE YOU SEE AND THEIR COLOURS AS WELL.
-"""}, 
+"""
+
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": prompt_content}, 
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
         ]
     )
 
     model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
     response = model.invoke([message])
+
+    # Log the interaction
+    append_log(
+        workflow_name="Workflow4",
+        prompt=prompt_content + f"Image URL: data:image/png;base64,{image_data}",
+        response=response.content
+    )
+
     return response.content
 
-
-###############################################################################
+# -----------------------------
 # Merged Functionality: Single "visualization_tool" that runs everything
-###############################################################################
+# -----------------------------
+
 def visualization_tool(user_query: str) -> dict:
     """
     Identifies relevant datasets, identifies appropriate plot_types, parses plot arguments, generates the plots,
-    and returns the output plot paths in JSON format.
+    and returns the output plot paths in JSON format, including restrict_studies in the output.
     """
 
     # 1) Run Workflow 1
@@ -444,9 +558,9 @@ def visualization_tool(user_query: str) -> dict:
     # Define plot types for which image descriptions should be skipped
     skip_image_description_plots = {"dotplot", "heatmap", "violin", "umap", "venn", "upset_genes", "network", "radar", "cell_frequency", "volcano"}
 
-
     # 2) Check if the plot type requires a DEG existence check
-    if w1_result.plot_type in specified_plots:
+    # Also, check if the query is about marker genes
+    if w1_result.plot_type in specified_plots and not w1_result.is_marker_genes:
         print("=== Plot type requires DEG check. Starting Workflow 2 ===")
         # Run Workflow 2
         dataset_metadata_str = get_dataset_metadata()
@@ -469,6 +583,10 @@ def visualization_tool(user_query: str) -> dict:
             try:
                 config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
                 print("Workflow 3 completed. Config JSON generated:", config_json)
+
+                # Parse the config JSON to extract `restrict_studies`
+                config_data = json.loads(config_json)
+                restrict_studies = config_data.get("restrict_studies")
 
                 # Write the config to a file
                 os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
@@ -498,7 +616,10 @@ def visualization_tool(user_query: str) -> dict:
                     else:
                         raise ValueError(f"Unexpected plot format: {plot}")
 
-                final_output = {"plot_type": w1_result.plot_type.upper()}
+                final_output = {
+                    "plot_type": w1_result.plot_type.upper(),
+                    "restrict_studies": restrict_studies,  # Include restrict_studies here
+                }
 
                 # Generate image descriptions only if plot_type is not in skip list
                 if w1_result.plot_type not in skip_image_description_plots:
@@ -510,7 +631,6 @@ def visualization_tool(user_query: str) -> dict:
                 else:
                     for i, (local_path, url) in enumerate(png_entries, start=1):
                         final_output[f"png_path_{i}"] = url
-                        # Optionally, you can add a default message or leave the description out
                         final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
 
                 # Add PDF paths to output
@@ -529,12 +649,19 @@ def visualization_tool(user_query: str) -> dict:
                 print(error_msg)
                 return {"error": error_msg}
 
-    # 3) If plot_type not in specified_plots, skip Workflow 2 and go directly to Workflow 3
+    # 3) If plot_type not in specified_plots or is_marker_genes is True, skip Workflow 2 and go directly to Workflow 3
     else:
-        print("=== Plot type does not require DEG check. Starting Workflow 3 directly ===")
+        if w1_result.is_marker_genes:
+            print("=== Query specifies marker genes. Bypassing Workflow 2 and starting Workflow 3 ===")
+        else:
+            print("=== Plot type does not require DEG check. Starting Workflow 3 directly ===")
         try:
             config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
             print("Workflow 3 completed. Config JSON generated:", config_json)
+
+            # Parse the config JSON to extract `restrict_studies`
+            config_data = json.loads(config_json)
+            restrict_studies = config_data.get("restrict_studies")
 
             # Write the config to a file
             os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
@@ -564,7 +691,10 @@ def visualization_tool(user_query: str) -> dict:
                 else:
                     raise ValueError(f"Unexpected plot format: {plot}")
 
-            final_output = {"plot_type": w1_result.plot_type.upper()}
+            final_output = {
+                "plot_type": w1_result.plot_type.upper(),
+                "restrict_studies": restrict_studies,  # Include restrict_studies here
+            }
 
             # Generate image descriptions only if plot_type is not in skip list
             if w1_result.plot_type not in skip_image_description_plots:
@@ -576,7 +706,6 @@ def visualization_tool(user_query: str) -> dict:
             else:
                 for i, (local_path, url) in enumerate(png_entries, start=1):
                     final_output[f"png_path_{i}"] = url
-                    # Optionally, you can add a default message or leave the description out
                     final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
 
             # Add PDF paths to output
@@ -585,7 +714,7 @@ def visualization_tool(user_query: str) -> dict:
 
             # Add TSV path if available
             if tsv_path:
-                final_output["tsv_path"] = tsv_path
+                    final_output["tsv_path"] = tsv_path
 
             print("Final output ready:", final_output)
             return final_output
