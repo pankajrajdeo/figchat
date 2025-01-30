@@ -1,0 +1,97 @@
+import os
+import json
+import base64
+import threading
+import pandas as pd
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+from preload_datasets import TRAIN_IMAGE_DATA_FILE
+
+# Initialize a lock for thread-safe file operations
+log_lock = threading.Lock()
+
+def load_image_log() -> dict:
+    """
+    Load the existing log from TRAIN_IMAGE_DATA_FILE.
+    If the file doesn't exist, initialize with an empty structure.
+    """
+    if not os.path.exists(TRAIN_IMAGE_DATA_FILE):
+        return {"image_descriptions": []}
+
+    try:
+        with open(TRAIN_IMAGE_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        # If the file is corrupted, reset it
+        return {"image_descriptions": []}
+
+def append_image_log(image_path: str, query: str, description: str) -> None:
+    """
+    Append a new image description entry to the TRAIN_IMAGE_DATA_FILE.
+    
+    Parameters:
+    - image_path: Path to the image.
+    - query: The user-provided query.
+    - description: The AI-generated image description.
+    """
+    with log_lock:  # Ensure thread-safe access
+        log_data = load_image_log()
+        log_entry = {
+            "image_path": image_path,
+            "query": query,
+            "description": description,
+            "timestamp": pd.Timestamp.now().isoformat()
+        }
+        log_data["image_descriptions"].append(log_entry)
+        with open(TRAIN_IMAGE_DATA_FILE, "w") as f:
+            json.dump(log_data, f, indent=4)
+
+def generate_image_description_tool(image_path: str, query: str) -> dict:
+    """
+    Generates a detailed description of a given image based on a user-provided query and logs the result.
+
+    Parameters:
+    - image_path (str): Path to the image file.
+    - query (str): User-provided prompt for image description.
+
+    Returns:
+    - dict: JSON-like structured output containing:
+        - "image_path": The original image file path.
+        - "query": The user query provided for image analysis.
+        - "description": AI-generated description of the image.
+        - "timestamp": When the description was generated.
+    """
+    if not os.path.exists(image_path):
+        return {"error": "Image file not found.", "image_path": image_path, "query": query}
+
+    # Convert image to Base64
+    with open(image_path, "rb") as img_file:
+        image_data = base64.b64encode(img_file.read()).decode("utf-8")
+
+    # Construct LLM message with user query
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": query},  # Use the user-provided query
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+        ]
+    )
+
+    # Initialize and invoke the model
+    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    response = model.invoke([message])
+    description = response.content.strip()
+
+    # If description is empty or invalid, do not log it
+    if not description:
+        return {"error": "Failed to generate image description.", "image_path": image_path, "query": query}
+
+    # Append to log file
+    append_image_log(image_path, query, description)
+
+    # Return structured response
+    return {
+        "image_path": image_path,
+        "query": query,
+        "description": description,
+        "timestamp": pd.Timestamp.now().isoformat()
+    }
