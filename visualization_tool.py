@@ -484,10 +484,12 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     if plot_type in {"dotplot", "cell_frequency", "radar", "heatmap"}:
         if adata_file_name == "HLCA_full_superadata_v3_norm_log_deg.h5ad":
             # For HLCA_full_superadata_v3_norm_log_deg.h5ad, use default values unless overridden by user
-            if result_config.restrict_studies is None:
+            if result_config.restrict_studies is None and result_config.covariates == ["normal"]:
                 result_config.restrict_studies = ["Sun_2020"]
-            if result_config.study_index is None:
                 result_config.study_index = "study"
+            elif result_config.restrict_studies == ["Sun_2020"]:
+                if result_config.covariates != ["normal"]:
+                    result_config.restrict_studies = None
         else:
             # For other datasets, ensure these fields are null
             result_config.restrict_studies = None
@@ -505,6 +507,9 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     
     return final_json
 
+    # if 'HLCA' in adata_file:
+    #     if covariates = ["normal"] and restrict_studies == ["Sun_2020"]:
+    #         restrict_studies = None
 # -----------------------------
 # Workflow 4: Image Description Generator
 # -----------------------------
@@ -693,7 +698,7 @@ def visualization_tool(user_query: str) -> dict:
 
             final_output = {
                 "plot_type": w1_result.plot_type.upper(),
-                "restrict_studies (plot was restricted to these studies)": restrict_studies,  # Include restrict_studies here
+                "restrict_studies (the result was restrict to following study/studies)": restrict_studies,  # Include restrict_studies here
             }
 
             # Generate image descriptions only if plot_type is not in skip list
