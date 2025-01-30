@@ -279,7 +279,7 @@ class HeatmapPlotConfig(BaseModel):
     )
     covariates: List[str] = Field(
         default_factory=list,
-        description="List of covariate values for filtering. Includes 'normal' by default."
+        description="List of covariate values for filtering. If selected dataset is HLCA, include 'normal' by default. If not HLCA, select the appropriate control group from the metadata."
     )
     direction: Literal["regulated", "up", "down", "markers"] = Field(
         "regulated",
@@ -327,17 +327,17 @@ class HeatmapPlotConfig(BaseModel):
     )
     restrict_studies: Optional[List[str]] = Field(
         default=None,
-        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+        description="For the HLCA dataset, if the user specifies a disease, select the study or studies specific to the disease(s) mentioned. For example, for IPF, select Kaminski_2020. If the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
     study_index: Optional[str] = Field(
         default=None,
-        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+        description="For the HLCA dataset, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
-    
     @root_validator(pre=True)
     def validate_fields(cls, values):
         diseases = values.get("disease")
         covariates_existing = values.get("covariates", [])
+        adata_file = values.get("adata_file", "")
 
         # If disease not provided but covariates exist, try to infer disease
         if not diseases and covariates_existing:
@@ -354,7 +354,7 @@ class HeatmapPlotConfig(BaseModel):
                 diseases_list = diseases
 
             # Prepend "normal" to covariates if not already present
-            if "normal" not in covariates_existing:
+            if "normal" not in covariates_existing and "HLCA" in adata_file:
                 values["covariates"] = ["normal"] + diseases_list
             else:
                 # Combine existing covariates and diseases, avoiding duplicates
@@ -362,7 +362,7 @@ class HeatmapPlotConfig(BaseModel):
                 values["covariates"] = combined
         else:
             # Default to ["normal"] if no disease and no covariates provided
-            if not covariates_existing:
+            if not covariates_existing and "HLCA" in adata_file:
                 values["covariates"] = ["normal"]
 
         # Validate that display_variables is provided
@@ -795,8 +795,7 @@ PLOT_GUIDES = {
         "  - covariate_index: Column name representing the main covariate (e.g., disease) in adata.obs. Default is 'disease'.\n"
         "  - direction: A variable describing whether to look at differentially expressed genes in disease vs control, "
         "               either 'regulated', 'up', 'down' or to look at cell type-specific 'markers' stored in the H5AD.\n"
-        "  - covariates: A list of covariate values to filter cells. By default, this list should always start with \"normal\" "
-        "                followed by the specified disease(s). For example, if the user specifies \"pulmonary fibrosis\", "
+        "  - covariates: List of covariate values for filtering. If selected dataset is HLCA, include 'normal' by default. If not HLCA, select the appropriate control group from the metadata. For example in HLCA, if the user specifies \"pulmonary fibrosis\", \n"
         "                the covariates should be [\"normal\", \"pulmonary fibrosis\"].\n"
         "  - show_individual_cells: Whether to show individual cells (True) or aggregate data by median (False). Default is True.\n"
         "  - cluster_rows / cluster_columns: Enable hierarchical clustering on rows (genes) or columns (groups). Defaults are True.\n"
@@ -822,7 +821,7 @@ PLOT_GUIDES = {
         "  - If 'covariates' results in an empty subset after filtering, this may cause errors. Validate input parameters accordingly.\n"
         "  - Always provide 'display_variables', as it is essential for defining grouping fields.\n"
         "  - The 'restrict_studies' and 'study_index' parameters allow you to filter the dataset to specific studies using metadata columns. "
-        "    If the dataset is HLCA and the user has not specified another study or studies to restrict to, use 'restrict_studies = [\"Sun_2020\"]' and "
+        "    If the dataset is HLCA and the user has specified a disease(s), restrict to studies that specifically have that disease (ideally a single study). If the user has not specified another study or studies to restrict to, use 'restrict_studies = [\"Sun_2020\"]' and "
         "    ensure 'study_index = \"study\"'. For datasets other than HLCA, these parameters should be set to `null`.\n"
     ),
 
