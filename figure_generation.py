@@ -1646,7 +1646,7 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
-        groupby=cell_type_index,
+        groupby=cell_type_index,  # ✅ Fixed incorrect variable
         figsize=figsize,
         color_map=color_map,
         show=False,
@@ -1664,6 +1664,7 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     plots.append([os.path.join(root, png_filename), description])
 
     return plots
+
 
 def plot_volcano(
     cell_type,
