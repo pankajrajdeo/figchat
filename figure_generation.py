@@ -529,26 +529,12 @@ def main(json_input, output_dir="results"):
                 )
 
     if plot_type == 'violin' or plot_type == 'all':
-        # If you have multiple display variables, pick one
         if len(display_variables) > 1:
             dis = display_variables[1]
         elif len(display_variables) > 0:
             dis = display_variables[0]
         else:
             dis = None
-
-        # Now do your covariate validation only for violin
-        if covariate_index in adata.obs:
-            print(f"Validating covariates in {covariate_index} for violin plot...")
-            # Filter covariates to ensure they exist in the AnnData
-            covariates = [cov for cov in covariates if cov in adata.obs[covariate_index].unique()]
-            if not covariates:
-                raise ValueError(
-                    f"No valid covariates found in {covariate_index} for the violin plot. "
-                    f"Please check your input."
-                )
-            print(f"Filtered valid covariates: {covariates}")
-
         plots = plot_gene_violin(
             gene_symbol,
             cell_type,
@@ -557,6 +543,36 @@ def main(json_input, output_dir="results"):
             alt_covariate_index=dis,
             plots=plots
         )
+        
+    # if plot_type == 'violin' or plot_type == 'all':
+    #     # If you have multiple display variables, pick one
+    #     if len(display_variables) > 1:
+    #         dis = display_variables[1]
+    #     elif len(display_variables) > 0:
+    #         dis = display_variables[0]
+    #     else:
+    #         dis = None
+
+    #     # Now do your covariate validation only for violin
+    #     if covariate_index in adata.obs:
+    #         print(f"Validating covariates in {covariate_index} for violin plot...")
+    #         # Filter covariates to ensure they exist in the AnnData
+    #         covariates = [cov for cov in covariates if cov in adata.obs[covariate_index].unique()]
+    #         if not covariates:
+    #             raise ValueError(
+    #                 f"No valid covariates found in {covariate_index} for the violin plot. "
+    #                 f"Please check your input."
+    #             )
+    #         print(f"Filtered valid covariates: {covariates}")
+
+    #     plots = plot_gene_violin(
+    #         gene_symbol,
+    #         cell_type,
+    #         covariates,
+    #         covariate_index,
+    #         alt_covariate_index=dis,
+    #         plots=plots
+    #     )
 
 
     if plot_type == 'venn' or plot_type == 'all':
@@ -1426,6 +1442,127 @@ def plot_heatmap_with_imshow(
 
     return plots
 
+
+# def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=(12, 8), plots=[]):
+#     """
+#     Create a dot plot for specified genes and a specific cell type.
+
+#     Parameters:
+#     - gene_symbols: List of gene symbols to include in the dot plot.
+#     - cell_type: The specific cell type to subset for the plot.
+#     - group_by: Column in the AnnData object to group data by.
+#     - figsize: Tuple defining the size of the plot.
+#     - plots: List to store generated plot file paths and descriptions.
+#     """
+#     global root
+#     # Tell Scanpy to save plots to the `root` directory
+#     sc.settings.figdir = root
+
+#     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {cell_type} cells by {group_by}"
+
+#     # Subset the data for the specified cell type
+#     subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
+
+#     # If gene_symbols is not a list, convert it
+#     if not isinstance(gene_symbols, list):
+#         gene_symbols = gene_symbols["Gene"].tolist()
+
+#     # Limit the number of genes to avoid cluttered plots
+#     if len(gene_symbols) > 40:
+#         gene_symbols = gene_symbols[:40]
+
+#     # We give Scanpy just a filename, not a full path:
+#     pdf_filename = sanitize_filename(f"dotplot_{cell_type}_{group_by}.pdf")
+#     png_filename = pdf_filename.replace(".pdf", ".png")
+
+#     # Now call Scanpy dotplot with `save=<filename>`, not a full path
+#     sc.pl.dotplot(
+#         subset_adata,
+#         var_names=gene_symbols,
+#         groupby=group_by,
+#         figsize=figsize,
+#         show=False,
+#         save=pdf_filename
+#     )
+#     sc.pl.dotplot(
+#         subset_adata,
+#         var_names=gene_symbols,
+#         groupby=group_by,
+#         figsize=figsize,
+#         show=False,
+#         save=png_filename
+#     )
+
+#     # Because Scanpy writes those files into `root/` automatically,
+#     # we build the final absolute paths to store in `plots`.
+#     final_pdf_path = os.path.join(root, pdf_filename)
+#     final_png_path = os.path.join(root, png_filename)
+
+#     plots.append([final_pdf_path, description])
+#     plots.append([final_png_path, description])
+
+#     return plots
+
+# def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 8), color_map="Blues", plots=[]):
+#     """
+#     Create a dot plot for specified genes across all cell types.
+
+#     Parameters:
+#     - gene_symbols: List of gene symbols to include in the dot plot.
+#     - covariate: The specific covariate to subset for the plot.
+#     - figsize: Tuple defining the size of the plot.
+#     - color_map: The color map to use for the plot.
+#     - plots: List to store generated plot file paths and descriptions.
+#     """
+#     global root
+#     # Tell Scanpy to save plots to the `root` directory
+#     sc.settings.figdir = root
+
+#     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
+
+#     # Subset the data for the specified covariate
+#     subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
+
+#     # If gene_symbols is not a list, convert it
+#     if not isinstance(gene_symbols, list):
+#         gene_symbols = gene_symbols["Gene"].tolist()
+
+#     # Limit the number of genes to avoid cluttered plots
+#     if len(gene_symbols) > 40:
+#         gene_symbols = gene_symbols[:40]
+
+#     # Again, give Scanpy a filename not a full path
+#     pdf_filename = sanitize_filename(f"dotplot_all_celltypes_{covariate}.pdf")
+#     png_filename = pdf_filename.replace(".pdf", ".png")
+
+#     sc.pl.dotplot(
+#         subset_adata,
+#         var_names=gene_symbols,
+#         groupby=cell_type_index,
+#         figsize=figsize,
+#         color_map=color_map,
+#         show=False,
+#         save=pdf_filename
+#     )
+#     sc.pl.dotplot(
+#         subset_adata,
+#         var_names=gene_symbols,
+#         groupby=cell_type_index,
+#         figsize=figsize,
+#         color_map=color_map,
+#         show=False,
+#         save=png_filename
+#     )
+
+#     # Build absolute file paths for final return
+#     final_pdf_path = os.path.join(root, pdf_filename)
+#     final_png_path = os.path.join(root, png_filename)
+
+#     plots.append([final_pdf_path, description])
+#     plots.append([final_png_path, description])
+
+#     return plots
+
 def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=(12, 8), plots=[]):
     """
     Create a dot plot for specified genes and a specific cell type.
@@ -1437,10 +1574,6 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     - figsize: Tuple defining the size of the plot.
     - plots: List to store generated plot file paths and descriptions.
     """
-    global root
-    # Tell Scanpy to save plots to the `root` directory
-    sc.settings.figdir = root
-
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {cell_type} cells by {group_by}"
 
     # Subset the data for the specified cell type
@@ -1454,37 +1587,32 @@ def plot_dot_plot_celltype(gene_symbols, cell_type, group_by="disease", figsize=
     if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # We give Scanpy just a filename, not a full path:
+    # Generate sanitized filenames
     pdf_filename = sanitize_filename(f"dotplot_{cell_type}_{group_by}.pdf")
     png_filename = pdf_filename.replace(".pdf", ".png")
 
-    # Now call Scanpy dotplot with `save=<filename>`, not a full path
+    # Generate dot plot without automatic saving
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
         groupby=group_by,
         figsize=figsize,
         show=False,
-        save=pdf_filename
-    )
-    sc.pl.dotplot(
-        subset_adata,
-        var_names=gene_symbols,
-        groupby=group_by,
-        figsize=figsize,
-        show=False,
-        save=png_filename
+        save=None
     )
 
-    # Because Scanpy writes those files into `root/` automatically,
-    # we build the final absolute paths to store in `plots`.
-    final_pdf_path = os.path.join(root, pdf_filename)
-    final_png_path = os.path.join(root, png_filename)
+    # Capture and save manually
+    fig = plt.gcf()
+    fig.savefig(os.path.join(root, pdf_filename), dpi=300, bbox_inches="tight")
+    fig.savefig(os.path.join(root, png_filename), dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
-    plots.append([final_pdf_path, description])
-    plots.append([final_png_path, description])
+    # Store file paths in plots
+    plots.append([os.path.join(root, pdf_filename), description])
+    plots.append([os.path.join(root, png_filename), description])
 
     return plots
+
 
 def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 8), color_map="Blues", plots=[]):
     """
@@ -1497,10 +1625,6 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     - color_map: The color map to use for the plot.
     - plots: List to store generated plot file paths and descriptions.
     """
-    global root
-    # Tell Scanpy to save plots to the `root` directory
-    sc.settings.figdir = root
-
     description = f"Gene expression dot plot of user-supplied or differentially expressed genes for {covariate}"
 
     # Subset the data for the specified covariate
@@ -1514,10 +1638,11 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
     if len(gene_symbols) > 40:
         gene_symbols = gene_symbols[:40]
 
-    # Again, give Scanpy a filename not a full path
+    # Generate sanitized filenames
     pdf_filename = sanitize_filename(f"dotplot_all_celltypes_{covariate}.pdf")
     png_filename = pdf_filename.replace(".pdf", ".png")
 
+    # Generate dot plot without automatic saving
     sc.pl.dotplot(
         subset_adata,
         var_names=gene_symbols,
@@ -1525,24 +1650,18 @@ def plot_dot_plot_all_celltypes(gene_symbols, covariate="control", figsize=(12, 
         figsize=figsize,
         color_map=color_map,
         show=False,
-        save=pdf_filename
-    )
-    sc.pl.dotplot(
-        subset_adata,
-        var_names=gene_symbols,
-        groupby=cell_type_index,
-        figsize=figsize,
-        color_map=color_map,
-        show=False,
-        save=png_filename
+        save=None
     )
 
-    # Build absolute file paths for final return
-    final_pdf_path = os.path.join(root, pdf_filename)
-    final_png_path = os.path.join(root, png_filename)
+    # Capture and save manually
+    fig = plt.gcf()
+    fig.savefig(os.path.join(root, pdf_filename), dpi=300, bbox_inches="tight")
+    fig.savefig(os.path.join(root, png_filename), dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
-    plots.append([final_pdf_path, description])
-    plots.append([final_png_path, description])
+    # Store file paths in plots
+    plots.append([os.path.join(root, pdf_filename), description])
+    plots.append([os.path.join(root, png_filename), description])
 
     return plots
 
