@@ -693,7 +693,7 @@ def visualization_tool(user_query: str) -> dict:
 
             final_output = {
                 "plot_type": w1_result.plot_type.upper(),
-                "restrict_studies": restrict_studies,  # Include restrict_studies here
+                "restrict_studies (plot was restricted to these studies)": restrict_studies,  # Include restrict_studies here
             }
 
             # Generate image descriptions only if plot_type is not in skip list
