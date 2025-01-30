@@ -428,6 +428,14 @@ class RadarPlotConfig(BasePlotConfig):
         default=None,
         description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
+    @root_validator(pre=True)
+    def fix_restrict_studies(cls, values):
+        """
+        Convert restrict_studies from a string to a list if needed.
+        """
+        if isinstance(values.get("restrict_studies"), str):
+            values["restrict_studies"] = [values["restrict_studies"]]
+        return values
 
 class CellFrequencyPlotConfig(BaseModel):
     """
@@ -471,6 +479,15 @@ class CellFrequencyPlotConfig(BaseModel):
         default=None,
         description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
+    
+    @root_validator(pre=True)
+    def fix_restrict_studies(cls, values):
+        """
+        Convert restrict_studies from a string to a list if needed.
+        """
+        if isinstance(values.get("restrict_studies"), str):
+            values["restrict_studies"] = [values["restrict_studies"]]
+        return values
 
 
 class VolcanoPlotConfig(BasePlotConfig):
@@ -550,6 +567,15 @@ class DotPlotConfig(BaseModel):
         default=None,
         description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
+    
+    @root_validator(pre=True)
+    def fix_restrict_studies(cls, values):
+        """
+        Convert restrict_studies from a string to a list if needed.
+        """
+        if isinstance(values.get("restrict_studies"), str):
+            values["restrict_studies"] = [values["restrict_studies"]]
+        return values
 
 class ViolinPlotConfig(BaseModel):
     """
@@ -600,14 +626,14 @@ class ViolinPlotConfig(BaseModel):
         ...,
         description="Mandatory list of all the grouping fields for aggregation/visualization derived from the 'Display Index' field of the dataset metadata."
     )
-    restrict_studies: Optional[List[str]] = Field(
-        default=None,
-        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
-    )
-    study_index: Optional[str] = Field(
-        default=None,
-        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
-    )
+    # restrict_studies: Optional[List[str]] = Field(
+    #     default=None,
+    #     description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    # )
+    # study_index: Optional[str] = Field(
+    #     default=None,
+    #     description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
+    # )
     """"
     restrict_variable2: Optional[List[str]] = Field(
         default=None,
@@ -883,12 +909,6 @@ PLOT_GUIDES = {
         "                       from the dataset's metadata and must be explicitly provided.\n"
         "Optional fields:\n"
         "  - The first variable in the list **must** be covariate_index. The second variable, if provided, is used for alternative grouping or coloring.)\n"
-        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
-        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
-        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
-        "                      this field should be set to `null`.\n"
-        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
-        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "venn": (
         "Venn or 'all' plot:\n"
