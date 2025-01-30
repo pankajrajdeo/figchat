@@ -481,7 +481,7 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
         raise ValueError(f"Unknown adata_file: {adata_file_name}. Please add it to the mapping.")
 
     # Hardcoded logic for specific plot types and dataset
-    if plot_type in {"dotplot", "cell_frequency", "radar", "violin", "heatmap"}:
+    if plot_type in {"dotplot", "cell_frequency", "radar", "heatmap"}:
         if adata_file_name == "HLCA_full_superadata_v3_norm_log_deg.h5ad":
             # For HLCA_full_superadata_v3_norm_log_deg.h5ad, use default values unless overridden by user
             if result_config.restrict_studies is None:
