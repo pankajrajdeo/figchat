@@ -1,5 +1,8 @@
 #figure_generation.py
-from preload_datasets import PRELOADED_DATA
+try:
+    from preload_datasets import PRELOADED_DATA
+except:
+    pass
 import scanpy as sc
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -374,12 +377,15 @@ def main(json_input, output_dir="results"):
     start_time = time.time()
 
     # Use the preloaded AnnData object instead of reading from disk
-    if adata_file in PRELOADED_DATA:
-        adata = PRELOADED_DATA[adata_file]
-        ##print(f"Using preloaded dataset for {adata_file}")
-    else:
-        # Fallback or error if the dataset isn't found
-        raise ValueError(f"{adata_file} not found in PRELOADED_DATA. Ensure it was preloaded.")
+    try:
+        if adata_file in PRELOADED_DATA:
+            adata = PRELOADED_DATA[adata_file]
+            ##print(f"Using preloaded dataset for {adata_file}")
+        else:
+            # Fallback or error if the dataset isn't found
+            raise ValueError(f"{adata_file} not found in PRELOADED_DATA. Ensure it was preloaded.")
+    except:
+        adata = sc.read_h5ad(adata_file)
 
     # Apply variable restrictions
     if restrict_studies and study_index:
@@ -435,13 +441,14 @@ def main(json_input, output_dir="results"):
         rs = ""
     else:
         rs = restrict_studies
-    if (plot_type == 'heatmap' or plot_type == 'all') and (direction != "markers" or len(rs)>0):
+
+    if (plot_type == 'heatmap' or plot_type == 'all') and (len(rs)>0): #direction != "markers" or [in the second statement]
         heatmap_ran = True
         if (cell_type is not None or len(cell_types_to_compare)>0) and len(gene_symbols) > 0:
             # Determine the covariate based on direction
             covar = "markers" if direction == "markers" else disease
             
-            if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
+            if len(gene_symbols) < 350 and heatmap_technology == 'seaborn':
                 print("seaborn", len(gene_symbols), display_variables)
                 plots = plot_heatmap(
                     gene_symbols,
@@ -658,13 +665,17 @@ def h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes):
             else:
                 cell_types = [cell_type]
 
+            if len(cell_types)==1:
+                num_gen = 100
+            else:
+                num_gen = 50
             # Loop over each cell type and filter the DataFrame
             for ct in cell_types:
                 filtered_df = marker_stats_df[marker_stats_df["Cell Population"] == ct]
                 if filtered_df.empty:
                     print(f"Warning: No marker genes found for cell type '{ct}'.")
                     continue  # Skip empty results but continue processing others
-                filtered_df = filtered_df.nsmallest(25, "P-Value")
+                filtered_df = filtered_df.nsmallest(num_gen, "P-Value")
                 aggregated_filtered_df = pd.concat([aggregated_filtered_df, filtered_df], axis=0)
                 
             if aggregated_filtered_df.empty:
@@ -1040,7 +1051,7 @@ def plot_heatmap(
 
     if samples_to_visualize == "cell-type":
         # Subset the data for the specified cell type(s)
-        print (cell_types_to_compare)
+        #print (cell_types_to_compare)
         if len(cell_types_to_compare)>0:
             subset_adata = adata[adata.obs[cell_type_index].isin(cell_types_to_compare)]
             if cell_type_index not in group_by:
@@ -1054,16 +1065,18 @@ def plot_heatmap(
         downsample_indices = np.random.choice(subset_adata.obs_names, size=2500, replace=False)
         subset_adata = subset_adata[downsample_indices]
 
-    try: 
+    # Updated gene_symbols extraction using the second approach
+    if isinstance(gene_symbols, list):
         valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
         expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
-    except Exception as e:
-        if isinstance(gene_symbols, list):
-            raise e
-        else:
-            gene_symbols = gene_symbols["Gene"].tolist()
-            valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
-            expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
+    else:
+        gene_symbols = gene_symbols["Gene"].tolist()
+        valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
+        expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
+
+    #print(f"Subset contains {subset_adata.n_obs} cells and {len(gene_symbols)} genes.")
+    #print(f"Expression data shape: {expression_data.shape}")
+    #print(f"First few values: {expression_data[:5, :5]}");sys.exit()
 
     # Build data_to_plot
     if show_individual_cells:
@@ -1078,6 +1091,8 @@ def plot_heatmap(
         ]
         data_to_plot = np.array(median_expression).T
         x_labels = unique_groups
+
+    #print(f"Data scaled shape: {data_to_plot.shape}")
 
     if len(x_labels) < 100:
         x_labels_verbose = x_labels
@@ -1342,6 +1357,7 @@ def plot_heatmap_with_imshow(
         subset_adata = subset_adata[downsample_indices]
 
     try: 
+        gene_symbols = gene_symbols["Gene"].tolist()
         valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
         expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
     except Exception as e:
@@ -2388,5 +2404,5 @@ def visualize_gene_network_igraph(
 
 if __name__ == '__main__':
 
-    json_input = 'BPD_infant_Sun_normalized_log_deg.json'
+    json_input = 'HLCA_full_superadata_v3_norm_log_deg.json'
     main(json_input, output_dir="results")
