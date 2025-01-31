@@ -273,9 +273,13 @@ class HeatmapPlotConfig(BaseModel):
         None,
         description="Subset data to a specific cell type. Must match entries in 'cell_type_index'."
     )
+    cell_types_to_compare: Optional[List[str]] = Field(
+        ...,
+        description="Optional list of cell types to compare in the heatmap visualization. Required when comparing multiple cell types. Return an empty list if not provided."
+    )
     disease: Optional[str] = Field(
         None,
-        description="Disease name to filter data. Derived from covariates."
+        description="Disease name to filter data."
     )
     covariates: List[str] = Field(
         default_factory=list,
@@ -790,7 +794,6 @@ PLOT_GUIDES = {
         "Visualizes gene expression across cells or aggregated groups in a clustered or un-clustered heatmap.\n"
         "\nRequired fields:\n"
         "  - gene_symbols: A list of gene IDs to display in the heatmap. Can be an empty list if not applicable.\n"
-        "  - cell_type: A specific cell type to subset the data (must align with 'cell_type_index').\n"
         "  - cell_type_index: Column name representing cell types in adata.obs. Default is 'ann_finest_level'.\n"
         "  - covariate_index: Column name representing the main covariate (e.g., disease) in adata.obs. Default is 'disease'.\n"
         "  - direction: A variable describing whether to look at differentially expressed genes in disease vs control, "
@@ -807,6 +810,9 @@ PLOT_GUIDES = {
         "                       default grouping fields from the 'Display Index' in the metadata will be used.\n"
         "\nOptional:\n"
         "  - covariate: A single covariate value for filtering (deprecated; use 'covariates' instead).\n"
+        "  - disease: Disease name extracted from user query matchng the dataset metadata. \n"
+        "  - cell_type: A specific cell type to subset the data (must align with 'cell_type_index').\n"
+        "  - cell_types_to_compare: List of cell types to compare in the heatmap visualization. Required when comparing multiple cell types. Return an empty list if not provided.\n"
         "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
         "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
         "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
