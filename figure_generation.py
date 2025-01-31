@@ -368,7 +368,6 @@ def main(json_input, output_dir="results"):
     direction = config.get("direction", None)
     heatmap_technology = config.get("heatmap_technology", "seaborn")
     network_technology = config.get("network_technology", "igraph")
-    cell_types_to_compare = config.get("cell_types_to_compare", None)
     show_individual_cells = config.get("show_individual_cells", True)
     plots = []
 
