@@ -1,3 +1,4 @@
+#figure_generation.py
 from preload_datasets import PRELOADED_DATA
 import scanpy as sc
 import matplotlib.pyplot as plt
@@ -356,6 +357,8 @@ def main(json_input, output_dir="results"):
     display_variables = config.get("display_variables", [covariate_index])
     gene_symbols = config.get("gene_symbols") or []
     cell_types_to_compare = config.get("cell_types_to_compare", [])
+    if cell_types_to_compare == None:
+        cell_types_to_compare = []
     n_genes = config.get("n_genes", 100)
     if "network" in plot_type:
         n_genes = 1000
@@ -434,11 +437,12 @@ def main(json_input, output_dir="results"):
         rs = restrict_studies
     if (plot_type == 'heatmap' or plot_type == 'all') and (direction != "markers" or len(rs)>0):
         heatmap_ran = True
-        if cell_type is not None and len(gene_symbols) > 0:
+        if (cell_type is not None or len(cell_types_to_compare)>0) and len(gene_symbols) > 0:
             # Determine the covariate based on direction
             covar = "markers" if direction == "markers" else disease
             
             if len(gene_symbols) < 250 and heatmap_technology == 'seaborn':
+                print("seaborn", len(gene_symbols), display_variables)
                 plots = plot_heatmap(
                     gene_symbols,
                     cell_type,
@@ -452,6 +456,7 @@ def main(json_input, output_dir="results"):
                     plots=plots
                 )
             else:
+                print("matplotlib", len(gene_symbols), heatmap_technology)
                 plots = plot_heatmap_with_imshow(
                     gene_symbols,
                     cell_type,
@@ -645,13 +650,27 @@ def h5ad_gene_signatures(gene_symbols, direction, cell_type, disease, n_genes):
             if "Cell Population" not in marker_stats_df.columns:
                 raise ValueError("The 'Cell Population' column is missing in marker_stats.")
             
-            # Filter by cell type
-            filtered_df = marker_stats_df[marker_stats_df["Cell Population"] == cell_type]
-            
-            if filtered_df.empty:
-                raise ValueError(f"No marker genes found for cell type '{cell_type}'.")
-            
-            top_genes = filtered_df
+            # Initialize an empty DataFrame to store aggregated results
+            aggregated_filtered_df = pd.DataFrame()
+            # Determine which cell types to compare
+            if len(cell_types_to_compare) > 0:
+                cell_types = list(cell_types_to_compare)
+            else:
+                cell_types = [cell_type]
+
+            # Loop over each cell type and filter the DataFrame
+            for ct in cell_types:
+                filtered_df = marker_stats_df[marker_stats_df["Cell Population"] == ct]
+                if filtered_df.empty:
+                    print(f"Warning: No marker genes found for cell type '{ct}'.")
+                    continue  # Skip empty results but continue processing others
+                filtered_df = filtered_df.nsmallest(25, "P-Value")
+                aggregated_filtered_df = pd.concat([aggregated_filtered_df, filtered_df], axis=0)
+                
+            if aggregated_filtered_df.empty:
+                raise ValueError(f"No marker genes found for any of the specified cell types: {cell_types}.")
+            filtered_df = aggregated_filtered_df
+            top_genes = aggregated_filtered_df
         
         else:  # Differential expression analysis
             if "disease_stats" not in adata.uns:
@@ -1019,24 +1038,32 @@ def plot_heatmap(
     group0_str = sanitize(group_by[0]) if isinstance(group_by, list) else sanitize(group_by)
     covariate_str = sanitize(covariate)
 
-    # Subset logic
     if samples_to_visualize == "cell-type":
-        subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
+        # Subset the data for the specified cell type(s)
+        print (cell_types_to_compare)
+        if len(cell_types_to_compare)>0:
+            subset_adata = adata[adata.obs[cell_type_index].isin(cell_types_to_compare)]
+            if cell_type_index not in group_by:
+                group_by = [cell_type_index]+group_by
+        else:
+            subset_adata = adata[adata.obs[cell_type_index].isin([cell_type])]
     else:
         subset_adata = adata[adata.obs[covariate_index].isin([covariate])]
 
-    if subset_adata.n_obs > 10000:
-        downsample_indices = np.random.choice(subset_adata.obs_names, size=10000, replace=False)
+    if subset_adata.n_obs > 2500:
+        downsample_indices = np.random.choice(subset_adata.obs_names, size=2500, replace=False)
         subset_adata = subset_adata[downsample_indices]
 
     try: 
-        expression_data = subset_adata[:, gene_symbols].X.toarray()
+        valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
+        expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
     except Exception as e:
         if isinstance(gene_symbols, list):
             raise e
         else:
             gene_symbols = gene_symbols["Gene"].tolist()
-            expression_data = subset_adata[:, gene_symbols].X.toarray()
+            valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
+            expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
 
     # Build data_to_plot
     if show_individual_cells:
@@ -1064,59 +1091,78 @@ def plot_heatmap(
 
     abs_max = np.max(np.abs(data_scaled)) * scaling_factor
 
-    # Clustering rows
+
+    # Clustering
     if cluster_rows:
+        print("Clustering rows...")
         row_linkage = linkage(data_scaled, method="average")
         row_order = leaves_list(row_linkage)
         data_scaled = data_scaled[row_order, :]
         gene_symbols = [gene_symbols[i] for i in row_order]
         row_colors = dendrogram(row_linkage, no_plot=True)["leaves_color_list"]
+        #print(f"Row order indices: {row_order}")
     else:
         row_colors = None
 
-    # Generate column colors
+    col_colors_group1 = None
+    col_dendro_colors = None
+
+    # Generate column colors based on group
     unique_groups1 = subset_adata.obs[group_by[0]].unique()
     covariate1_palette = sns.color_palette("tab10", len(unique_groups1))
     covariate1_color_map = {group: covariate1_palette[i] for i, group in enumerate(unique_groups1)}
-
+    if len(group_by)>1:
+        unique_groups2 = subset_adata.obs[group_by[1]].unique()
+        covariate2_palette = sns.color_palette("tab10", len(unique_groups2))
+        covariate2_color_map = {group: covariate2_palette[i] for i, group in enumerate(unique_groups2)}
     if show_individual_cells:
         col_colors_group1 = np.array([covariate1_color_map.get(value, "gray") for value in subset_adata.obs[group_by[0]]])
+        if len(group_by)>1:
+            col_colors_group2 = np.array([covariate2_color_map.get(value, "gray") for value in subset_adata.obs[group_by[1]]])
     else:
         col_colors_group1 = np.array([covariate1_color_map.get(group, "gray") for group in unique_groups1])
 
-    col_dendro_colors = None
     if cluster_columns:
+        print("Clustering columns...")
         col_linkage = linkage(data_scaled.T, method="average")
         col_order = leaves_list(col_linkage)
         data_scaled = data_scaled[:, col_order]
         x_labels = [x_labels[i] for i in col_order]
+        #print(f"Column order indices: {col_order}")
+        # Generate column dendrogram colors
         col_dendrogram = dendrogram(col_linkage, no_plot=True)
         col_dendro_colors = np.array(col_dendrogram["leaves_color_list"])
-
         if show_individual_cells:
-            col_colors_group1 = np.array([
-                covariate1_color_map.get(value, "gray")
-                for value in subset_adata.obs[group_by[0]].iloc[col_order]
-            ])
+            col_colors_group1 = np.array([covariate1_color_map.get(value, "gray") for value in subset_adata.obs[group_by[0]].iloc[col_order]])
+            if len(group_by)>1:
+                col_colors_group2 = np.array([covariate2_color_map.get(value, "gray") for value in subset_adata.obs[group_by[1]].iloc[col_order]])
         else:
+            # Group by unique groups in the specified group_by column and reorder based on col_order
             grouped_obs = subset_adata.obs.groupby(group_by[0]).groups
             col_colors_group1 = np.array([
-                covariate1_color_map.get(g, "gray")
-                for g in np.array(list(grouped_obs.keys()))[col_order]
-            ])
+                covariate1_color_map.get(group_by_value, "gray")
+                for group_by_value in np.array(list(grouped_obs.keys()))[col_order]])
 
-    color_bar2_label = "Clusters"
-    if col_colors_group1 is not None and col_dendro_colors is not None:
-        col_colors_combined = [col_colors_group1, col_dendro_colors]
+        # Combine the color bars into a single list
+        color_bar2_label = "Clusters"
+        if col_colors_group1 is not None:
+            if len(group_by)>1 and show_individual_cells:
+                col_colors_combined = [col_colors_group1, col_colors_group2]
+                color_bar2_label = group_by[1]
+            else:
+                col_colors_combined = [col_colors_group1, col_dendro_colors]
+        else:
+            col_colors_combined = None
     else:
         col_colors_combined = [col_colors_group1]
+        unique_colors = set(tuple(row) for row in col_colors_group1)
 
     # Create custom colormap
     yellow_black_blue = LinearSegmentedColormap.from_list(
-        "yellow_black_blue", ["deepskyblue", "black", "yellow"]
-    )
-
+        "yellow_black_blue", ["deepskyblue", "black", "yellow"])
+    
     # Create the clustermap
+    print("Creating the clustermap...")
     g = sns.clustermap(
         data_scaled,
         cmap=yellow_black_blue,
@@ -1129,30 +1175,36 @@ def plot_heatmap(
         vmax=abs_max,
         row_cluster=cluster_rows,
         col_cluster=cluster_columns,
-        colors_ratio=0.015,
+        colors_ratio=0.015,  # Reduce the space ratio allocated for the color bars
     )
 
-    # Draw a thin white line between color bars
+    # Draw a thin white line separating the color bars
     if cluster_columns and col_colors_group1 is not None and col_dendro_colors is not None:
+        # Get the position of the color bar axes
         col_colors_ax = g.ax_col_colors
-        line_width = 2
+        
+        # Add a thin white line between the color bars
+        line_width = 2  # Thickness of the white line
         col_colors_ax.hlines(
-            y=0.5,
+            y=0.5,  # Adjust based on the number of bars
             xmin=0, xmax=1,
             colors="white",
             linewidth=line_width,
             transform=col_colors_ax.transAxes,
-        )
+    )
 
-    # Adjust gene label size
+    print("Clustermap created successfully!")
+
+    # Adjust font size for gene labels
     gene_label_size = max(4.5, 100 // len(gene_symbols))
     g.ax_heatmap.set_yticklabels(
         g.ax_heatmap.get_yticklabels(),
         fontsize=gene_label_size,
-        rotation=0
+        rotation=0  # Ensure no rotation for y-axis labels
     )
 
-    # Covariate legend
+
+    # Covariate legend for group_by[0]
     legend_handles_covariates1 = [
         plt.Line2D([0], [0], marker="s", color=covariate1_color_map[group], markersize=8, linestyle="", label=group)
         for group in covariate1_color_map
@@ -1165,48 +1217,66 @@ def plot_heatmap(
         bbox_transform=plt.gcf().transFigure,
     )
 
-    # If group_by has >1 elements, we do the second legend (unchanged logic)...
+    # Covariate legend for group_by[1] (if exists)
+    if len(group_by) > 1:
+        legend_handles_covariates2 = [
+            plt.Line2D([0], [0], marker="s", color=covariate2_color_map[group], markersize=8, linestyle="", label=group)
+            for group in covariate2_color_map
+        ]
+        legend2 = plt.legend(
+            handles=legend_handles_covariates2,
+            title=group_by[1].capitalize(),
+            loc="upper left",
+            bbox_to_anchor=(1.05, 0.8),  # Position below the first legend
+            bbox_transform=plt.gcf().transFigure,
+        )
 
-    # Adjust the color bar position
-    cbar_position = g.cax.get_position()
-    new_cbar_position = [
-        cbar_position.x0 + 0.01,
-        cbar_position.y0,
-        cbar_position.width * 0.5,
-        cbar_position.height
-    ]
-    g.cax.set_position(new_cbar_position)
+        # Add the first legend back to prevent overwriting
+        g.ax_col_dendrogram.add_artist(legend1)
 
-    # Label color bar
+
+    # Adjust the position and width of the color bar
+    cbar_position = g.cax.get_position()  # Get the current position
+    new_cbar_position = [cbar_position.x0 + 0.01,  # Shift it slightly to the right (optional)
+                        cbar_position.y0,         # Keep the y-position unchanged
+                        cbar_position.width * 0.5,  # Reduce the width by half
+                        cbar_position.height]     # Keep the height unchanged
+    g.cax.set_position(new_cbar_position)  # Apply the new position
+
+    # Set label for the color bar (heatmap legend)
     if median_scale_expression:
         g.cax.set_ylabel("Median Norm Log Exp)", fontsize=9)
     else:
         g.cax.set_ylabel("Expression Values (log))", fontsize=9)
-    g.cax.yaxis.set_label_position("left")
+    g.cax.yaxis.set_label_position("left")  # Ensures the label appears on the right side
 
-    # Covariate bar label
+    # Add label for the covariate color bar
     g.ax_col_colors.annotate(
         f"{group_by[0].capitalize()}",
-        xy=(1.01, 1),
+        xy=(1.01, 1),  # Adjusted coordinates to move it above the color bar
         xycoords='axes fraction',
-        rotation=0,
+        rotation=0,  # Horizontal orientation
         verticalalignment="top",
-        horizontalalignment="left",
+        horizontalalignment="left",  # Left justify the label next to the bar
         fontsize=7,
         color="black",
     )
-    if cluster_columns and col_colors_group1 is not None and col_dendro_colors is not None:
+        
+    print("Added covariate bar label.")
+    
+    if cluster_columns and col_colors_group1 is not None:
         g.ax_col_colors.annotate(
             color_bar2_label.capitalize(),
-            xy=(1.01, 0.4),
+            xy=(1.01, 0.4),  # Adjusted coordinates to move it above the color bar
             xycoords='axes fraction',
-            rotation=0,
+            rotation=0,  # Horizontal orientation
             verticalalignment="top",
-            horizontalalignment="left",
+            horizontalalignment="left",  # Left justify the label next to the bar
             fontsize=7,
             color="black",
         )
-
+        print("Added cluster bar label.")
+        
     # Save
     base_name = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}"
     pdf_path = sanitize_filename(base_name + ".pdf")
@@ -1272,13 +1342,15 @@ def plot_heatmap_with_imshow(
         subset_adata = subset_adata[downsample_indices]
 
     try: 
-        expression_data = subset_adata[:, gene_symbols].X.toarray()
+        valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
+        expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
     except Exception as e:
         if isinstance(gene_symbols, list):
             raise e
         else:
             gene_symbols = gene_symbols["Gene"].tolist()
-            expression_data = subset_adata[:, gene_symbols].X.toarray()
+            valid_gene_symbols = [gene for gene in gene_symbols if gene in subset_adata.var_names]
+            expression_data = subset_adata[:, valid_gene_symbols].X.toarray()
 
     # Build data_to_plot
     if show_individual_cells:
