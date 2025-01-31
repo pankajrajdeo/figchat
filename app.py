@@ -127,7 +127,7 @@ async def on_chat_start():
             "2. Show me detailed metadata for the HLCA scRNA-seq dataset.\n"
             "3. Show me a UMAP of IPF, COPD, and healthy controls with expression of SFTPC.\n"
             "4. Show me a dot plot of AT2 marker genes in AT2 cells.\n"
-            "5. Show me a heatmap of abCap DEGs in BPD+PH vs. controls in all disease conditions in Sucre BPD\n"      #Error: Show me a heatmap of AT2 cell marker gene expression in ILD.
+            "5. Show me a heatmap of AT2 cell marker gene expression in ILD.\n"
             "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma.\n"
             "7. Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as an Upset plot.\n"
             "8. Show me a gene regulatory network of pulmonary fibrosis DEGs in adventitial fibroblasts.\n\n"
