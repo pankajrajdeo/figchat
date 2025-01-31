@@ -1,8 +1,5 @@
 #figure_generation.py
-try:
-    from preload_datasets import PRELOADED_DATA
-except:
-    pass
+from preload_datasets import PRELOADED_DATA
 import scanpy as sc
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
