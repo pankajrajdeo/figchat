@@ -22,6 +22,12 @@ import pandas as pd
 
 BASE_URL = "https://devapp.lungmap.net"
 
+# -----------------------------
+# LLM
+# -----------------------------
+visualization_tool_llm_base = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+visualization_tool_llm_advanced = ChatOpenAI(model="gpt-4o")
+
 # Suppress font-related messages
 logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
@@ -44,7 +50,7 @@ def load_log() -> dict:
         return {"workflows": []}
 
     try:
-        with open(TRAIN_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:  # Fix: Use "replace" for decoding errors
+        with open(TRAIN_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
             return json.load(f)
     except json.JSONDecodeError:
         # If the file is corrupted, reset it
@@ -68,7 +74,7 @@ def append_log(workflow_name: str, prompt: str, response: str) -> None:
             "timestamp": pd.Timestamp.now().isoformat()
         }
         log_data["workflows"].append(log_entry)
-        with open(TRAIN_DATA_FILE, "w") as f:
+        with open(TRAIN_DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(log_data, f, indent=4)
 
 # -----------------------------
@@ -87,8 +93,7 @@ class Workflow1Model(BaseModel):
         "heatmap", "radar", "cell_frequency", "volcano", "stats",
         "dotplot", "violin", "venn", "upset_genes", "umap", "network"
     ]
-    is_marker_genes: bool  # New boolean field
-
+    is_marker_genes: bool
 
 workflow1_parser = PydanticOutputParser(pydantic_object=Workflow1Model)
 
@@ -184,7 +189,7 @@ def get_dataset_metadata() -> str:
 
 def run_workflow1(user_query: str) -> Workflow1Model:
     dataset_metadata_str = get_dataset_metadata()
-    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    model = visualization_tool_llm_base
     chain = workflow1_prompt | model | workflow1_parser
     
     # Format the prompt
@@ -205,7 +210,6 @@ def run_workflow1(user_query: str) -> Workflow1Model:
     )
     
     return result
-
 
 # -----------------------------
 # Workflow 2: DEG Existence Confirmation
@@ -260,7 +264,7 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
             alt_degs = deg_info
             break
 
-    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
+    model = visualization_tool_llm_base
     chain = deg_check_prompt | model | degcheck_parser
     
     # Prepare the prompt input
@@ -300,13 +304,6 @@ specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  # Plot 
 # -----------------------------
 # Workflow 3: Plot Configuration
 # -----------------------------
-import os
-import json
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
-
-# Import specialized plot classes, PLOT_GUIDES, and utility functions from utils.py
 from utils import (
     HeatmapPlotConfig,
     StatsPlotConfig,
@@ -319,8 +316,7 @@ from utils import (
     UpSetGenesPlotConfig,
     UmapPlotConfig,
     NetworkPlotConfig,
-    PLOT_GUIDES,
-    parse_tsv_data  # parse_tsv_data is still needed
+    PLOT_GUIDES
 )
 
 def get_single_dataset_metadata(all_metadata: dict, target_dataset: str) -> dict:
@@ -453,8 +449,13 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
         refined_query=refined_query
     )
 
+    # Use visualization_tool_llm_advanced only for heatmap and dotplot; otherwise use visualization_tool_llm_base.
+    if plot_type in {"heatmap", "dotplot"}:
+        model = visualization_tool_llm_advanced
+    else:
+        model = visualization_tool_llm_base
+
     # Call the LLM and parse output using the chosen Pydantic class
-    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
     chain = prompt_template | model | parser
 
     result_config = chain.invoke({
@@ -507,44 +508,6 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     
     return final_json
 
-    # if 'HLCA' in adata_file:
-    #     if covariates = ["normal"] and restrict_studies == ["Sun_2020"]:
-    #         restrict_studies = None
-# -----------------------------
-# Workflow 4: Image Description Generator
-# -----------------------------
-
-def generate_image_description(image_path: str, plot_type: str) -> str:
-    from langchain_core.messages import HumanMessage
-    with open(image_path, "rb") as img_file:
-        image_data = base64.b64encode(img_file.read()).decode("utf-8")
-
-    prompt_content = f"""
-Provide a detailed description of the image, covering EACH AND EVERY textual and visual element comprehensively. The image represents a '{plot_type}' plot.
-Summarize the overall structure and highlight key features such as cluster shapes, patterns, gradients, axes, legends, and titles. Describe trends, notable regions, or transitions, and explain how visual elements like colors relate to metadata (e.g., 'cell_type').
-
-Use clear and concise language, appropriate for computational biologists, to explain terms like 'clusters' and 'dimensionality reduction.' Ensure the description flows logically, starting with an overview, diving into specific details, and concluding with interpretations of visual patterns and their potential biological relevance. NOTE: WRITE DETAIL ABOUT EACH AND EVERY CELL TYPE YOU SEE AND THEIR COLOURS AS WELL.
-"""
-
-    message = HumanMessage(
-        content=[
-            {"type": "text", "text": prompt_content}, 
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
-        ]
-    )
-
-    model = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
-    response = model.invoke([message])
-
-    # Log the interaction
-    append_log(
-        workflow_name="Workflow4",
-        prompt=prompt_content + f"Image URL: data:image/png;base64,{image_data}",
-        response=response.content
-    )
-
-    return response.content
-
 # -----------------------------
 # Merged Functionality: Single "visualization_tool" that runs everything
 # -----------------------------
@@ -554,25 +517,18 @@ def visualization_tool(user_query: str) -> dict:
     Identifies relevant datasets, identifies appropriate plot_types, parses plot arguments, generates the plots,
     and returns the output plot paths in JSON format, including restrict_studies in the output.
     """
-
     # 1) Run Workflow 1
     print("=== Starting Workflow 1 ===")
     w1_result = run_workflow1(user_query)
     print("Workflow 1 completed. Results:", w1_result)
-
-    # Define plot types for which image descriptions should be skipped
-    skip_image_description_plots = {"dotplot", "heatmap", "violin", "umap", "venn", "upset_genes", "network", "radar", "cell_frequency", "volcano"}
-
+    
     # 2) Check if the plot type requires a DEG existence check
     # Also, check if the query is about marker genes
     if w1_result.plot_type in specified_plots and not w1_result.is_marker_genes:
         print("=== Plot type requires DEG check. Starting Workflow 2 ===")
-        # Run Workflow 2
         dataset_metadata_str = get_dataset_metadata()
         w2_result = run_workflow2(user_query, w1_result.dataset_name, dataset_metadata_str)
         print("Workflow 2 completed. Results:", w2_result)
-
-        # If deg_existence = false, stop and return
         if not w2_result.deg_existence:
             print("DEG existence check failed. Terminating pipeline.")
             return {
@@ -588,27 +544,18 @@ def visualization_tool(user_query: str) -> dict:
             try:
                 config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
                 print("Workflow 3 completed. Config JSON generated:", config_json)
-
-                # Parse the config JSON to extract `restrict_studies`
                 config_data = json.loads(config_json)
                 restrict_studies = config_data.get("restrict_studies")
-
-                # Write the config to a file
                 os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
                 output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
                 with open(output_json_path, "w") as jf:
                     jf.write(config_json)
-
-                # Execute figure_generation.py
                 output_dir = PLOT_OUTPUT_DIR
                 plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
                 print("Figure generation outputs:", plot_outputs_raw)
-
-                # Process multiple plot outputs with Workflow 4 integration
                 png_entries = []
                 pdf_paths = []
                 tsv_path = None
-
                 for plot in plot_outputs_raw:
                     if isinstance(plot, list) and len(plot) == 2:
                         file_path = plot[0]
@@ -620,41 +567,22 @@ def visualization_tool(user_query: str) -> dict:
                             tsv_path = f"{BASE_URL}{file_path}"
                     else:
                         raise ValueError(f"Unexpected plot format: {plot}")
-
                 final_output = {
                     "plot_type": w1_result.plot_type.upper(),
-                    "restrict_studies": restrict_studies,  # Include restrict_studies here
+                    "restrict_studies (restricted to following study/studies)": restrict_studies,
                 }
-
-                # Generate image descriptions only if plot_type is not in skip list
-                if w1_result.plot_type not in skip_image_description_plots:
-                    for i, (local_path, url) in enumerate(png_entries, start=1):
-                        description = generate_image_description(local_path, w1_result.plot_type)
-                        print(f"Generated description for {local_path}: {description}")
-                        final_output[f"png_path_{i}"] = url
-                        final_output[f"image_description_{i}"] = description
-                else:
-                    for i, (local_path, url) in enumerate(png_entries, start=1):
-                        final_output[f"png_path_{i}"] = url
-                        final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
-
-                # Add PDF paths to output
+                for i, (local_path, url) in enumerate(png_entries, start=1):
+                    final_output[f"png_path_{i}"] = url
                 for j, pdf in enumerate(pdf_paths, start=1):
                     final_output[f"pdf_path_{j}"] = pdf
-
-                # Add TSV path if available
                 if tsv_path:
                     final_output["tsv_path"] = tsv_path
-
                 print("Final output ready:", final_output)
                 return final_output
-
             except Exception as e:
                 error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
                 print(error_msg)
                 return {"error": error_msg}
-
-    # 3) If plot_type not in specified_plots or is_marker_genes is True, skip Workflow 2 and go directly to Workflow 3
     else:
         if w1_result.is_marker_genes:
             print("=== Query specifies marker genes. Bypassing Workflow 2 and starting Workflow 3 ===")
@@ -663,27 +591,18 @@ def visualization_tool(user_query: str) -> dict:
         try:
             config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
             print("Workflow 3 completed. Config JSON generated:", config_json)
-
-            # Parse the config JSON to extract `restrict_studies`
             config_data = json.loads(config_json)
             restrict_studies = config_data.get("restrict_studies")
-
-            # Write the config to a file
             os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
             output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
             with open(output_json_path, "w") as jf:
                 jf.write(config_json)
-
-            # Execute figure_generation.py
             output_dir = PLOT_OUTPUT_DIR
             plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
             print("Figure generation outputs:", plot_outputs_raw)
-
-            # Process multiple plot outputs with Workflow 4 integration
             png_entries = []
             pdf_paths = []
             tsv_path = None
-
             for plot in plot_outputs_raw:
                 if isinstance(plot, list) and len(plot) == 2:
                     file_path = plot[0]
@@ -695,35 +614,18 @@ def visualization_tool(user_query: str) -> dict:
                         tsv_path = f"{BASE_URL}{file_path}"
                 else:
                     raise ValueError(f"Unexpected plot format: {plot}")
-
             final_output = {
                 "plot_type": w1_result.plot_type.upper(),
-                "restrict_studies (the result was restrict to following study/studies)": restrict_studies,  # Include restrict_studies here
+                "restrict_studies (restricted to following study/studies)": restrict_studies,
             }
-
-            # Generate image descriptions only if plot_type is not in skip list
-            if w1_result.plot_type not in skip_image_description_plots:
-                for i, (local_path, url) in enumerate(png_entries, start=1):
-                    description = generate_image_description(local_path, w1_result.plot_type)  # Pass plot_type here
-                    print(f"Generated description for {local_path}: {description}")
-                    final_output[f"png_path_{i}"] = url
-                    final_output[f"image_description_{i}"] = description
-            else:
-                for i, (local_path, url) in enumerate(png_entries, start=1):
-                    final_output[f"png_path_{i}"] = url
-                    final_output[f"image_description_{i}"] = "Image description skipped for this plot type."
-
-            # Add PDF paths to output
+            for i, (local_path, url) in enumerate(png_entries, start=1):
+                final_output[f"png_path_{i}"] = url
             for j, pdf in enumerate(pdf_paths, start=1):
                 final_output[f"pdf_path_{j}"] = pdf
-
-            # Add TSV path if available
             if tsv_path:
-                    final_output["tsv_path"] = tsv_path
-
+                final_output["tsv_path"] = tsv_path
             print("Final output ready:", final_output)
             return final_output
-
         except Exception as e:
             error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
             print(error_msg)
