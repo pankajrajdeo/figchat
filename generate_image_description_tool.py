@@ -1,3 +1,4 @@
+# generate_image_description_tool.py
 import os
 import json
 import base64
@@ -6,6 +7,8 @@ import pandas as pd
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from preload_datasets import TRAIN_IMAGE_DATA_FILE
+
+BASE_URL = "https://devapp.lungmap.net"  # <-- BASE URL for public image paths
 
 # Initialize a lock for thread-safe file operations
 log_lock = threading.Lock()
@@ -61,17 +64,23 @@ def generate_image_description_tool(image_path: str, query: str) -> dict:
         - "description": AI-generated description of the image.
         - "timestamp": When the description was generated.
     """
-    if not os.path.exists(image_path):
-        return {"error": "Image file not found.", "image_path": image_path, "query": query}
+    # --- UPDATED BLOCK TO ENSURE LEADING SLASH ---
+    if image_path.startswith(BASE_URL):
+        relative_path = "/" + image_path[len(BASE_URL):].lstrip("/")
+    else:
+        relative_path = image_path
+
+    if not os.path.exists(relative_path):
+        return {"error": "Image file not found.", "image_path": relative_path, "query": query}
 
     # Convert image to Base64
-    with open(image_path, "rb") as img_file:
+    with open(relative_path, "rb") as img_file:
         image_data = base64.b64encode(img_file.read()).decode("utf-8")
 
     # Construct LLM message with user query
     message = HumanMessage(
         content=[
-            {"type": "text", "text": query},  # Use the user-provided query
+            {"type": "text", "text": query},
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
         ]
     )
@@ -83,14 +92,14 @@ def generate_image_description_tool(image_path: str, query: str) -> dict:
 
     # If description is empty or invalid, do not log it
     if not description:
-        return {"error": "Failed to generate image description.", "image_path": image_path, "query": query}
+        return {"error": "Failed to generate image description.", "image_path": relative_path, "query": query}
 
     # Append to log file
-    append_image_log(image_path, query, description)
+    append_image_log(relative_path, query, description)
 
     # Return structured response
     return {
-        "image_path": image_path,
+        "image_path": relative_path,
         "query": query,
         "description": description,
         "timestamp": pd.Timestamp.now().isoformat()
