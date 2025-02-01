@@ -37,7 +37,7 @@ rcParams['font.family'] = 'DejaVu Sans'
 def sanitize_filename(filename):
     """
     Remove invalid characters from the filename, replace spaces with underscores,
-    and append a UUID to ensure unique filenames.
+    and append a short UUID to ensure unique filenames.
     """
     # Remove invalid characters and replace spaces with underscores
     sanitized = filename.replace("'", "").replace(" ", "_").replace(",", "_").replace("+", "_")
@@ -45,10 +45,10 @@ def sanitize_filename(filename):
     # Split the filename into name and extension
     name, ext = os.path.splitext(sanitized)
     
-    # Generate a UUID4 string
-    unique_id = uuid.uuid4()
+    # Generate a short UUID (first 5 characters)
+    unique_id = str(uuid.uuid4())[:5]
     
-    # Append the UUID to the filename
+    # Append the shortened UUID to the filename
     sanitized_filename = f"{name}_{unique_id}{ext}"
     
     return sanitized_filename
