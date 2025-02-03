@@ -79,18 +79,18 @@ def parse_tsv_data(file_path):
             "layers_keys": []
         },
         "BPD_fetal_normalized_log_deg.h5ad": {
-            "shape": (43607, 2000),
+            "shape": (43607, 36601),
             "X_dtype": "float64",
             "obs_fields": ['orig.ident', 'nCount_RNA', 'nFeature_RNA', 'percent.mt', 'dataset', 'age', 'condition', 
                            'broad_condition', 'percent.rb', 'nCount_SCT', 'nFeature_SCT', 'louvain', 'celltype', 
                            'sub.cluster', 'SCT_snn_res.1.4', 'celltype_lineage', 'donor_id', 'tissue', 'sex'],
             "var_fields": ['features'],
-            "obsm_keys": ['X_harmony', 'X_pca', 'X_umap'],
-            "uns_keys": ['disease_comparison_summary', 'disease_stats', 'interaction_data', 'log1p', 'marker_stats', 'neighbors', 'rank_genes_groups'],
+            "obsm_keys": ['X_umap'],
+            "uns_keys": ['disease_comparison_summary', 'disease_stats', 'interaction_data', 'log1p', 'marker_stats', 'rank_genes_groups'],
             "layers_keys": [],
             "raw": {
                 "exists": True,
-                "shape": (43607, 2000),
+                "shape": (43607, 36601),
                 "var_fields": ['features']
             }
         }
