@@ -667,27 +667,44 @@ class ViolinPlotConfig(BaseModel):
 
 class VennPlotConfig(BasePlotConfig):
     """
-    'venn' or 'all':
-    - Venn diagram for 2 or 3 sets of marker genes from different cell types.
-    - Must have 'cell_types_to_compare' with length 2 or 3.
+    'venn' or 'all' plot:
+    - For marker gene comparisons, supply a list of 2 or 3 cell types.
+    - For covariate DEG comparisons, supply a list of 2 or 3 covariates and a cell type.
     """
     plot_type: Literal["venn", "all"]
     
-    cell_types_to_compare: List[str] = Field(
-        ...,
-        description="List of 2 or 3 cell types to compare in a Venn diagram. Do not select the 'Unknown' cell type."
+    cell_types_to_compare: Optional[List[str]] = Field(
+        None,
+        description="List of 2 or 3 cell types to compare in a Venn diagram. Do not select the 'Unknown' cell type. Omit if comparing DEGs by covariates."
+    )
+    covariates: Optional[List[str]] = Field(
+        None,
+        description="List of 2 or 3 covariates (e.g., disease conditions) to compare in a Venn diagram for a selected cell type. Provide only if performing a covariate DEG comparison."
+    )
+    cell_type: Optional[str] = Field(
+        None,
+        description="Cell type to filter DEGs by, when comparing covariate DEGs. Provide only if performing a covariate DEG comparison."
     )
 
 class UpSetGenesPlotConfig(BasePlotConfig):
     """
-    'upset_genes' or 'all':
-    Similar to Venn but handles more than 3 sets or more complex overlaps.
+    'upset_genes' or 'all' plot:
+    - For marker gene comparisons, supply a list of cell types.
+    - For covariate DEG comparisons, supply a list of covariates and a cell type.
     """
     plot_type: Literal["upset_genes", "all"]
     
-    cell_types_to_compare: List[str] = Field(
-        ...,
-        description="List of cell types for intersection in an UpSet plot."
+    cell_types_to_compare: Optional[List[str]] = Field(
+        None,
+        description="List of cell types for intersection in an UpSet plot. Omit if comparing DEGs by covariates."
+    )
+    covariates: Optional[List[str]] = Field(
+        None,
+        description="List of covariates for intersection in an UpSet plot (DEG comparison). Provide only if performing a covariate DEG comparison."
+    )
+    cell_type: Optional[str] = Field(
+        None,
+        description="Cell type to filter DEGs by, when comparing covariate DEGs. Provide only if performing a covariate DEG comparison."
     )
 
 class UmapPlotConfig(BaseModel):
@@ -917,19 +934,21 @@ PLOT_GUIDES = {
     ),
     "venn": (
         "Venn or 'all' plot:\n"
-        "Shows overlap of marker genes for 2 or 3 cell types.\n"
-        "Required field:\n"
-        "  - cell_types_to_compare with length 2 or 3. Do not select the 'Unknown' cell type\n"
-        "Optional fields:\n"
-        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "Shows overlap of marker genes for 2 or 3 cell types OR, alternatively, compares DEGs across 2 or 3 covariate conditions for a selected cell type.\n"
+        "Required field for marker gene comparison:\n"
+        "  - cell_types_to_compare (list of 2 or 3 cell types; do not include 'Unknown')\n"
+        "For covariate DEG comparison, provide:\n"
+        "  - covariates (list of 2 or 3 conditions) and\n"
+        "  - cell_type (the cell type to filter by)\n"
     ),
     "upset_genes": (
         "UpSet_Genes or 'all' plot:\n"
-        "Handles complex overlaps of marker genes among multiple sets of cell types.\n"
-        "Required field:\n"
-        "  - cell_types_to_compare: list of cell types.\n"
-        "Optional fields:\n"
-        "  - restrict_studies...restrict_variable4 and study_index...variable4_index: Optional fields to restrict the dataset based on metadata columns before plotting. These parameters allow finer control over which subset of the data is used by specifying metadata values and their corresponding column names. By default, restrict the dataset to a single variable based on the user query and dataset metadata. If the user explicitly requests restrictions on multiple variables, then populate restrict_variable2...restrict_variable4 accordingly. Otherwise, only restrict to the single most relevant variable derived from the query.\n"
+        "Handles complex overlaps of marker genes among multiple cell types OR compares DEGs across multiple covariate conditions for a given cell type.\n"
+        "Required field for marker gene comparison:\n"
+        "  - cell_types_to_compare (list of cell types)\n"
+        "For covariate DEG comparison, provide:\n"
+        "  - covariates (list of conditions) and\n"
+        "  - cell_type (the cell type to filter by)\n"
     ),
     "umap": (
         "UMAP or 'all' plot:\n"
