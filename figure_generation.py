@@ -1,5 +1,8 @@
 #figure_generation.py
-from preload_datasets import PRELOADED_DATA
+try:
+    from preload_datasets import PRELOADED_DATA
+except:
+    pass
 import scanpy as sc
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -23,6 +26,7 @@ from statsmodels.stats.multitest import multipletests
 import argparse
 import json
 import zipfile
+import math
 
 import matplotlib
 import logging
@@ -108,7 +112,12 @@ def main_visualizations(
     cluster_colors = {}
     mapping = None
     if cluster_by:
-        unique_clusters = sorted(adata.obs[cluster_by].unique())
+        try: 
+            unique_clusters = sorted(adata.obs[cluster_by].unique())
+        except:
+            unique_clusters = adata.obs[cluster_by].unique()
+            unique_clusters = [x for x in unique_clusters if x is not None and not (isinstance(x, float) and math.isnan(x))]
+            unique_clusters.sort()
         if gene_flag:  # Only create numeric mapping for gene expression plots
             mapping = {cluster: str(i + 1) for i, cluster in enumerate(unique_clusters)}
             adata.obs[f'{cluster_by}_label'] = adata.obs[cluster_by].map(mapping)
@@ -584,13 +593,22 @@ def main(json_input, output_dir="results"):
 
 
     if plot_type == 'venn' or plot_type == 'all':
-        if len(cell_types_to_compare) < 4:
-            plots = compare_marker_genes_and_plot_venn(cell_types_to_compare, plots=plots)
-        else:
-            plots = compare_marker_genes_and_plot_upset(cell_types_to_compare, plots=plots)
+        if len(cell_types_to_compare)>0:
+            if len(cell_types_to_compare)<4:
+                plots = compare_marker_genes_and_plot_venn(cell_types_to_compare,plots=plots)
+            else:
+                plots = compare_marker_genes_and_plot_upset(cell_types_to_compare,plots=plots)
+        if len(covariates)>0: 
+            if len(covariates)<4:
+                plots = compare_covariate_genes_and_plot_venn(covariates,cell_type,plots=plots)
+            else:
+                plots = compare_covariate_genes_and_plot_upset(covariates,cell_type,plots=plots)
 
-    if plot_type == 'upset_genes' or plot_type == 'all':
-        plots = compare_marker_genes_and_plot_upset(cell_types_to_compare, plots=plots)
+    if plot_type == 'upset_genes' or plot_type == 'upset' or plot_type == 'all':
+        if len(cell_types_to_compare)>0:
+            plots = compare_marker_genes_and_plot_upset(cell_types_to_compare,plots=plots)
+        if len(covariates)>0: 
+            plots = compare_covariate_genes_and_plot_upset(covariates,cell_type,plots=plots)
 
     if plot_type in ['umap', 'all']:
         # Extract relevant variables for UMAP from JSON configuration
@@ -1881,6 +1899,11 @@ def compare_marker_genes_and_plot_venn(cell_types, plots=[]):
     else:
         raise ValueError("Only 2 or 3 cell types can be compared for a Venn diagram.")
     
+    plt.title("Weighted Venn Diagram of Marker Genes")
+    plt.savefig(pdf_path, bbox_inches="tight")
+    plt.savefig(png_path, bbox_inches="tight")
+    plt.close()
+
     # Export intersecting and unique genes
     export_data = {}
     
@@ -1913,6 +1936,94 @@ def compare_marker_genes_and_plot_venn(cell_types, plots=[]):
     plots.append([pdf_path, description])
     plots.append([png_path, description])
     
+    return plots
+
+def compare_covariate_genes_and_plot_venn(covariates, cell_type, plots=[]):
+
+    from matplotlib_venn import venn2, venn3
+    import matplotlib.pyplot as plt
+
+    """
+    Retrieve DEGs for specified covariates and plot a weighted Venn diagram
+    showing overlap of genes for a given cell type. Saves the Venn diagram to a PDF.
+
+    Parameters:
+    - covariates: List of 2 or 3 covariate names to compare.
+    - cell_type: The cell type to filter DEGs by.
+    - plots: List to append plot metadata to.
+
+    Returns:
+    - Updated plots list.
+    """
+
+    global root
+    description = "Venn diagram of top covariate DEGs specific for a single selected cell type."
+    base_name = f"{root}/venn_overlapping_degs"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+    tsv_path = sanitize_filename(base_name + ".tsv")
+
+    # Retrieve DEGs for each covariate
+    covariate_genes = {}
+    for covariate in covariates:
+        try:
+            top_genes, _ = h5ad_gene_signatures(
+                gene_symbols=[],
+                direction="regulated",  # Assuming markers as default
+                cell_type=cell_type,
+                disease=covariate,
+                n_genes=1000  # Adjust as needed
+            )
+            covariate_genes[covariate] = set(top_genes["Gene"].tolist())
+        except ValueError as e:
+            print (f"Error retrieving genes for covariate '{covariate}'")
+            covariates = [cov for cov in covariates if cov != covariate]
+
+    # Create a Venn diagram based on the number of covariates
+    plt.figure(figsize=(8, 6))
+    if len(covariates) == 2:
+        venn = venn2([covariate_genes[covariates[0]], covariate_genes[covariates[1]]], set_labels=covariates)
+    elif len(covariates) == 3:
+        venn = venn3([covariate_genes[covariates[0]], covariate_genes[covariates[1]], covariate_genes[covariates[2]]], set_labels=covariates)
+
+    # Export intersecting and unique genes
+    export_data = {}
+
+    if len(covariates) == 2:
+        intersect = covariate_genes[covariates[0]] & covariate_genes[covariates[1]]
+        unique_1 = covariate_genes[covariates[0]] - covariate_genes[covariates[1]]
+        unique_2 = covariate_genes[covariates[1]] - covariate_genes[covariates[0]]
+
+        export_data["Intersect"] = list(intersect)
+        export_data[f"Unique to {covariates[0]}"] = list(unique_1)
+        export_data[f"Unique to {covariates[1]}"] = list(unique_2)
+
+    elif len(covariates) == 3:
+        intersect_all = covariate_genes[covariates[0]] & covariate_genes[covariates[1]] & covariate_genes[covariates[2]]
+        unique_1 = covariate_genes[covariates[0]] - covariate_genes[covariates[1]] - covariate_genes[covariates[2]]
+        unique_2 = covariate_genes[covariates[1]] - covariate_genes[covariates[0]] - covariate_genes[covariates[2]]
+        unique_3 = covariate_genes[covariates[2]] - covariate_genes[covariates[0]] - covariate_genes[covariates[1]]
+
+        export_data["Intersect All"] = list(intersect_all)
+        export_data[f"Unique to {covariates[0]}"] = list(unique_1)
+        export_data[f"Unique to {covariates[1]}"] = list(unique_2)
+        export_data[f"Unique to {covariates[2]}"] = list(unique_3)
+
+    # Convert export_data to a DataFrame and save to a tab-delimited text file
+
+    export_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in export_data.items()]))
+    export_df.to_csv(tsv_path, sep="\t", index=False)
+
+    # Save the Venn diagram to a PDF
+    plt.title(f"Weighted Venn Diagram of Covariate DEGs for '{cell_type}'")
+    plt.savefig(pdf_path, bbox_inches="tight")
+    plt.savefig(png_path, bbox_inches="tight")
+    plt.close()
+
+    plots.append([tsv_path, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+
     return plots
 
 def compare_marker_genes_and_plot_upset(cell_types, plots=[]):
@@ -2006,6 +2117,76 @@ def compare_marker_genes_and_plot_upset(cell_types, plots=[]):
 
     return plots
 
+def compare_covariate_genes_and_plot_upset(covariates, cell_type, plots=[]):
+    """
+    Retrieve DEGs for specified covariates and plot an UpSet diagram
+    showing overlap of DEGs for a given cell type. Saves the UpSet plot to a PDF and exports
+    overlapping DEG data to a text file.
+
+    Parameters:
+    - covariates: List of covariate names to compare.
+    - cell_type: The cell type to filter DEGs by.
+    - plots: List to append plot metadata to.
+
+    Returns:
+    - Updated plots list.
+    """
+
+    base_name = f"{root}/upset_covariate_DEGs_{cell_type}"
+    pdf_path = sanitize_filename(base_name + ".pdf")
+    png_path = pdf_path.replace(".pdf", ".png")
+    tsv_path = sanitize_filename(base_name + ".tsv")
+
+    description = "Upset plot of DEGs from different covariates for a single cell type."
+
+    from upsetplot import UpSet, from_contents
+
+    # Retrieve DEGs for each covariate
+    covariate_genes = {}
+    for covariate in covariates:
+        try:
+            top_genes, _ = h5ad_gene_signatures(
+                gene_symbols=[],
+                direction="regulated",  # Assuming markers as default
+                cell_type=cell_type,
+                disease=covariate,
+                n_genes=1000  # Adjust as needed
+            )
+            covariate_genes[covariate] = set(top_genes["Gene"].tolist())
+        except ValueError as e:
+            print (f"Error retrieving genes for covariate '{covariate}'")
+            covariates = [cov for cov in covariates if cov != covariate]
+
+    # Create UpSet plot data from DEGs
+    upset_data = from_contents(covariate_genes)
+
+    # Plot the UpSet diagram
+    plt.figure(figsize=(10, 8))
+    upset_plot = UpSet(upset_data, show_counts=True, sort_categories_by=None)
+    upset_plot.plot()
+    plt.title(f"UpSet Diagram of DEGs for Covariates ({cell_type})")
+    plt.savefig(pdf_path, bbox_inches="tight", dpi=150)
+    plt.savefig(png_path, bbox_inches="tight", dpi=150)
+    plt.close()
+
+    # Export intersecting and unique genes
+    export_data = {}
+    for covariate, genes in covariate_genes.items():
+        export_data[f"Unique to {covariate}"] = list(genes)
+
+    intersect_all = set.intersection(*covariate_genes.values())
+    export_data["Intersect All"] = list(intersect_all)
+
+    # Convert export_data to a DataFrame and save to a tab-delimited text file
+    export_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in export_data.items()]))
+    export_df.to_csv(tsv_path, sep="\t", index=False)
+
+    # Append plot paths and descriptions to the plots list
+    plots.append([tsv_path, description])
+    plots.append([pdf_path, description])
+    plots.append([png_path, description])
+
+    return plots
 
 def plot_aggregated_cell_frequencies_radar(
     covariate_index,
