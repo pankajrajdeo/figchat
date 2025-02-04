@@ -359,13 +359,13 @@ def main(json_input, output_dir="results"):
     restrict_variable2 = config.get("restrict_variable2", None)
     restrict_variable3 = config.get("restrict_variable3", None)
     restrict_variable4 = config.get("restrict_variable4", None)
-    covariates = config.get("covariates", [])
+    covariates = config.get("covariates") or []
     cell_type = config.get("cell_type", None)
     gene_symbol = config.get("gene", None)
     disease = config.get("disease", None)
     display_variables = config.get("display_variables", [covariate_index])
     gene_symbols = config.get("gene_symbols") or []
-    cell_types_to_compare = config.get("cell_types_to_compare", [])
+    cell_types_to_compare = config.get("cell_types_to_compare") or []
     if cell_types_to_compare == None:
         cell_types_to_compare = []
     n_genes = config.get("n_genes", 100)
@@ -1965,6 +1965,7 @@ def compare_covariate_genes_and_plot_venn(covariates, cell_type, plots=[]):
 
     # Retrieve DEGs for each covariate
     covariate_genes = {}
+    valid_covariates=[]
     for covariate in covariates:
         try:
             top_genes, _ = h5ad_gene_signatures(
@@ -1975,10 +1976,13 @@ def compare_covariate_genes_and_plot_venn(covariates, cell_type, plots=[]):
                 n_genes=1000  # Adjust as needed
             )
             covariate_genes[covariate] = set(top_genes["Gene"].tolist())
+            valid_covariates.append(covariate)
         except ValueError as e:
-            print (f"Error retrieving genes for covariate '{covariate}'")
-            covariates = [cov for cov in covariates if cov != covariate]
-
+            pass
+            #print (f"Error retrieving genes for covariate '{covariate}'")
+            #covariates = [cov for cov in covariates if cov != covariate]
+    covariates = valid_covariates
+    
     # Create a Venn diagram based on the number of covariates
     plt.figure(figsize=(8, 6))
     if len(covariates) == 2:
@@ -2059,9 +2063,11 @@ def compare_marker_genes_and_plot_upset(cell_types, plots=[]):
 
     # Ensure all specified cell types are present in the marker stats
     available_cell_types = marker_stats_df["Cell Population"].unique()
+    cell_types2=[]
     for cell_type in cell_types:
-        if cell_type not in available_cell_types:
-            raise ValueError(f"Cell type '{cell_type}' not found in marker statistics. Available types: {available_cell_types}")
+        if cell_type  in available_cell_types:
+            cell_types2.append(cell_type)
+    cell_types = cell_types2
 
     # Retrieve marker genes for each cell type
     marker_genes = {}
@@ -2143,6 +2149,7 @@ def compare_covariate_genes_and_plot_upset(covariates, cell_type, plots=[]):
 
     # Retrieve DEGs for each covariate
     covariate_genes = {}
+    valid_covariates = []
     for covariate in covariates:
         try:
             top_genes, _ = h5ad_gene_signatures(
@@ -2153,9 +2160,12 @@ def compare_covariate_genes_and_plot_upset(covariates, cell_type, plots=[]):
                 n_genes=1000  # Adjust as needed
             )
             covariate_genes[covariate] = set(top_genes["Gene"].tolist())
+            valid_covariates.append(covariate)
         except ValueError as e:
-            print (f"Error retrieving genes for covariate '{covariate}'")
-            covariates = [cov for cov in covariates if cov != covariate]
+            pass
+            #print (f"Error retrieving genes for covariate '{covariate}'")
+            #covariates = [cov for cov in covariates if cov != covariate]
+    covariates = valid_covariates
 
     # Create UpSet plot data from DEGs
     upset_data = from_contents(covariate_genes)
