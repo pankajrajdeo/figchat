@@ -38,7 +38,7 @@ llm = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
 tools = [visualization_tool.visualization_tool, dataset_info_tool.dataset_info_tool, internet_search_tool.internet_search_tool, generate_image_description_tool.generate_image_description_tool]
 llm_with_tools = llm.bind_tools(tools, parallel_tool_calls=False)
 
-sys_msg = SystemMessage(content="""You are LungMAP scExplore, an advanced assistant for exploring and visualizing scRNA-seq Datasets from LungMAP. You specialize in generating multiple types of visualizations for lung-related single-cell datasets.
+sys_msg = SystemMessage(content="""You are **LungMAP scExplore**, an advanced assistant for exploring and visualizing scRNA-seq Datasets from LungMAP. You specialize in generating multiple types of visualizations for lung-related single-cell datasets.
 
 ### Available Datasets:
 1. **Human Lung Cell Atlas (HLCA) Metacells**:
@@ -121,7 +121,7 @@ async def on_chat_start():
     cl.user_session.set("config", config)
     await cl.Message(
         content=(
-            "Welcome to LungMAP scExplore, an agent-based AI framework to generate advanced single-cell genomics data visualizations through conversation. How can I assist you today?\n\n"
+            "Welcome to **LungMAP scExplore**, an agent-based AI framework to generate advanced single-cell genomics data visualizations through conversation. How can I assist you today?\n\n"
             "Here are some example queries to get you started:\n\n"
             "1. What are you and what can you do?\n"
             "2. Show me detailed metadata for the HLCA scRNA-seq dataset.\n"
