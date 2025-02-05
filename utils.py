@@ -753,7 +753,7 @@ class UmapPlotConfig(BaseModel):
     # Maps to 'subset_values' in main_visualizations
     covariates: List[str] = Field(
         default_factory=list,
-        description="Specific values within covariate_index to subset on."
+        description="Specific values within covariate_index to subset on. If asked for disease condition, pass all the values within covariate_index and if none specified, default is 'normal' or 'control' based on the metadata if not specified."
     )
 
     # Maps to 'color_by' in main_visualizations
@@ -982,9 +982,9 @@ PLOT_GUIDES = {
         "Required fields:\n"
         "  - adata_file: Path to the AnnData .h5ad file.\n"
         "  - plot_type: Must be 'umap'.\n"
+        "  - covariates: Specific values within covariate_index to subset on. If asked for disease condition, pass all the values within covariate_index and if none specified, default is 'normal' or 'control' based on the metadata if not specified.\n"
         "Optional fields:\n"
         "  - covariate_index: Column in adata.obs to subset data (e.g., 'condition').\n"
-        "  - covariates: List of values within covariate_index to subset (e.g., ['BPD+PH', 'Term infant']).\n"
         "  - color_by: Metadata column or gene to color the UMAP by. If color by parameter is not provided-By default color by cell type if the field is available or with any other available field..\n"
         "  - cell_type_index: Metadata column or gene to color the UMAP by. If the color_by parameter is not provided, it will default to coloring by cell type (if available) or by any other available field.\n"
         "  - gene: Gene name to visualize expression (overrides color_by if present).\n"
