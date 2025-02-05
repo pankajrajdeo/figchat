@@ -15,6 +15,7 @@ import scipy.stats as stats
 from scipy.stats import mannwhitneyu
 import os
 import re
+import hashlib
 import uuid
 import matplotlib_venn as venn
 import upsetplot as upset
@@ -38,22 +39,32 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 # Set a default font family to avoid Arial warnings
 rcParams['font.family'] = 'DejaVu Sans'
 
-def sanitize_filename(filename):
+def sanitize_filename(filename, max_length=200):
     """
     Remove invalid characters from the filename, replace spaces with underscores,
-    and append a short UUID to ensure unique filenames.
+    append a short UUID to ensure uniqueness, and truncate the filename if it is too long.
     """
-    # Remove invalid characters and replace spaces with underscores
+    # Replace problematic characters
     sanitized = filename.replace("'", "").replace(" ", "_").replace(",", "_").replace("+", "_")
     
     # Split the filename into name and extension
     name, ext = os.path.splitext(sanitized)
     
-    # Generate a short UUID (first 5 characters)
+    # Append a short UUID for uniqueness
     unique_id = str(uuid.uuid4())[:5]
+    new_name = f"{name}_{unique_id}"
     
-    # Append the shortened UUID to the filename
-    sanitized_filename = f"{name}_{unique_id}{ext}"
+    # Reassemble the full filename
+    sanitized_filename = f"{new_name}{ext}"
+    
+    # If the filename is too long, truncate it and append a hash to keep it unique
+    if len(sanitized_filename) > max_length:
+        # Create a hash from the full filename for uniqueness
+        hash_str = hashlib.md5(sanitized_filename.encode()).hexdigest()[:8]
+        # Determine how many characters we can keep from new_name
+        allowed_length = max_length - len(ext) - len(hash_str) - 2  # extra 2 for underscores
+        truncated_name = new_name[:allowed_length]
+        sanitized_filename = f"{truncated_name}_{hash_str}{ext}"
     
     return sanitized_filename
 
@@ -138,6 +149,13 @@ def main_visualizations(
         global_palette = None
 
     # Subset the data
+    valid_groups = []
+    unique_possible_groups= adata.obs[subset_col].unique()
+    for sv in subset_values:
+        if sv != "Unknown" and sv in unique_possible_groups:
+            valid_groups.append(sv)
+    subset_values = valid_groups
+
     subsets = subset_data(adata, subset_col, subset_values) if subset_col else {"All": adata}
     subset_names = list(subsets.keys())
     n_subsets = len(subset_names)
@@ -168,11 +186,30 @@ def main_visualizations(
                 legend_ax.axis('off')
             axes = [ax]
         else:
-            fig = plt.figure(figsize=(8 * n_subsets, 10))
-            gs = fig.add_gridspec(2, n_subsets, height_ratios=[4, 1])
-            axes = [fig.add_subplot(gs[0, i]) for i in range(n_subsets)]
-            legend_ax = fig.add_subplot(gs[1, :])
-            legend_ax.axis('off')
+            if n_subsets > 3:
+                # Use a grid with 3 columns and as many rows as needed
+                n_cols = 3
+                n_rows = int(np.ceil(n_subsets / n_cols))
+                fig = plt.figure(figsize=(8 * n_cols, 10 * n_rows))
+                # Reserve an extra row at the bottom for the legend
+                gs = fig.add_gridspec(n_rows + 1, n_cols, height_ratios=[4]*n_rows + [1])
+                axes = []
+                # Loop over grid positions, but only add an axis if we have a corresponding subset
+                for r in range(n_rows):
+                    for c in range(n_cols):
+                        idx = r * n_cols + c
+                        if idx < n_subsets:
+                            axes.append(fig.add_subplot(gs[r, c]))
+                legend_ax = fig.add_subplot(gs[-1, :])
+                legend_ax.axis('off')
+            else:
+                # Use the old logic when n_subsets is 2 or 3
+                fig = plt.figure(figsize=(8 * n_subsets, 10))
+                gs = fig.add_gridspec(2, n_subsets, height_ratios=[4, 1])
+                axes = [fig.add_subplot(gs[0, i]) for i in range(n_subsets)]
+                legend_ax = fig.add_subplot(gs[1, :])
+                legend_ax.axis('off')
+
 
     output_suffix = "side_by_side_umap" if n_subsets > 1 else "umap"
     legend_elements = []
@@ -1982,7 +2019,7 @@ def compare_covariate_genes_and_plot_venn(covariates, cell_type, plots=[]):
             #print (f"Error retrieving genes for covariate '{covariate}'")
             #covariates = [cov for cov in covariates if cov != covariate]
     covariates = valid_covariates
-    
+
     # Create a Venn diagram based on the number of covariates
     plt.figure(figsize=(8, 6))
     if len(covariates) == 2:
