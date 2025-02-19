@@ -74,10 +74,17 @@ You can generate the following plot types:
 
 ### Tools Available:
 - **visualization_tool**: Use this tool to generate visualizations based on the user’s query. You can specify the dataset and choose the observation column for customizing the plot (e.g., "cell_type", "disease", or other metadata fields).
-- **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets listed above.
+- **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets. **Note:** You can either:
+  - Retrieve the preloaded metadata (default route) which shows all dataset details, or 
+  - Provide a TSV file path in your query to parse and display the contents of that file.
 - **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 - **generate_image_description_tool:** Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
 
+### Handling LungMAP Queries:
+- If a request is related to LungMAP.net or its resources, automatically construct the search URL as follows:
+  - `https://www.lungmap.net/search/?queries[]=$String`
+  - Replace `$String` with the user’s search term and return the appropriate URL.
+                        
 ### Key Guidelines:
 - **Cross Check the Metadata**: If you are unsure whether a specific cell type, disease, or any other field is available for a user query, first consult the Dataset Information Tool to explore the metadata.
 - **Heatmap, Dotplot, and Stats Plots**: These work even if the user does not provide a gene list, as they are precomputed internally. Do not ask the user for gene symbols unless they are explicitly provided.
@@ -88,7 +95,8 @@ You can generate the following plot types:
     - "What insights can you derive from this?"  
     - "Describe the patterns you see in this plot."
     
-Always strive to understand the user’s intent and provide accurate and context-appropriate responses based on the tools and datasets at your disposal.""")
+Always strive to understand the user’s intent and provide accurate and context-appropriate responses based on the tools and datasets at your disposal."""
+)
 
 def assistant(state: MessagesState):
     # Prepend the system message to the conversation history
@@ -123,14 +131,14 @@ async def on_chat_start():
         content=(
             "Welcome to **LungMAP scExplore**, an agent-based AI framework to generate advanced single-cell genomics data visualizations through conversation. How can I assist you today?\n\n"
             "Here are some example queries to get you started:\n\n"
-            "1. What are you and what can you do?\n"
-            "2. Show me detailed metadata for the HLCA scRNA-seq dataset.\n"
-            "3. Show me a UMAP of IPF, COPD, and healthy controls with expression of SFTPC.\n"
-            "4. Show me a dot plot of AT2 marker genes in AT2 cells.\n"
-            "5. Show me a heatmap of AT2 cell marker gene expression in ILD.\n"
-            "6. Show me a violin plot of SFTPC expression in AT2 cells for IPF, COPD, and asthma.\n"
-            "7. Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as an Upset plot.\n"
-            "8. Show me a gene regulatory network of pulmonary fibrosis DEGs in adventitial fibroblasts.\n\n"
+            "1. Please list the datasets, sampled tissues, and clinical conditions that you are able to allow me to explore.\n"
+            "2. How can I compare clinical conditions that are sampled in these datasets?\n"
+            "3. What data visualizations are you able to carry out for any of these conditions and their corresponding cell types?\n"
+            "4. Please display side-by-side UMAPs of each clinical condition in the Sucre Lab BPD dataset, colored by the cell types that are present in each.\n"
+            "5. Please display side-by-side UMAPs of the Sucre et al. clinical conditions, colored by EDNRB.\n"
+            "6. Please show heatmaps of the differentially expressed genes (DEGs) in abCAP cells from the BPD+PHT samples.\n"
+            "7. Please generate a gene regulatory network from the DEGs in abCAP cells from the BPD+PHT samples.\n"
+            "8. What is the significance of the downregulated genes in abCAP endothelial cells from the BPD+PHT samples?\n\n"
             "**Note:**\n"
             "1. Plot generation and detailed description generation may take a minute or two. Please wait while it is being generated.\n"
             "2. In case the session gets stuck, please click on the notepad icon in the upper corner."
