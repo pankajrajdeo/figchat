@@ -1347,6 +1347,7 @@ def plot_heatmap(
     base_name = f"{root}/heatmap_{cell_type_str}_{group0_str}_{covariate_str}_{'cells' if show_individual_cells else 'groups'}{'_clustered' if cluster_rows or cluster_columns else ''}"
     pdf_path = sanitize_filename(base_name + ".pdf")
     png_path = pdf_path.replace(".pdf", ".png")
+    txt_path = pdf_path.replace(".pdf", ".tsv")
 
     g.savefig(pdf_path, bbox_inches="tight", dpi=150)
     g.savefig(png_path, bbox_inches="tight", dpi=150)
@@ -1354,6 +1355,12 @@ def plot_heatmap(
 
     plots.append([pdf_path, description])
     plots.append([png_path, description])
+    plots.append([txt_path, description])
+
+    # Return the data frame with annotations
+    df_heatmap = pd.DataFrame(data_scaled, index=gene_symbols, columns=x_labels)
+    with open(txt_path, "w") as f:
+        df_heatmap.to_csv(f, sep="\t")
 
     return plots
 
@@ -2575,6 +2582,20 @@ def visualize_gene_network_igraph(
     # Define layout for the graph
     layout = g.layout("fr")  # Fruchterman-Reingold layout
 
+    # Export interactions
+    filtered_interactions["Symbol1_LogFC"] = filtered_interactions["Symbol1"].map(fold_change_map)
+    filtered_interactions["Symbol2_LogFC"] = filtered_interactions["Symbol2"].map(fold_change_map)
+    interaction_file = sanitize_filename(f"{root}/network_interactions.tsv")
+    columns_to_export = [
+        "Symbol1",
+        "Symbol2",
+        "Symbol1_LogFC",
+        "Symbol2_LogFC",
+        "InteractionType",
+        "Source",
+    ]
+    filtered_interactions[columns_to_export].to_csv(interaction_file, index=False, sep="\t")
+
     # Sanitize filenames
     pdf_path = sanitize_filename(base_name + ".pdf")
     png_path = pdf_path.replace(".pdf", ".png")
@@ -2585,10 +2606,11 @@ def visualize_gene_network_igraph(
         target=pdf_path,
         layout=layout,
         vertex_size=20,
-        bbox=(1300, 1300),
+        bbox=(1400, 1400),
         margin=50,
         vertex_label_size=11,
         edge_arrow_size=0.5,
+        vertex_frame_width=0,
     )
 
     # Generate PNG output
@@ -2597,10 +2619,11 @@ def visualize_gene_network_igraph(
         target=png_path,
         layout=layout,
         vertex_size=20,
-        bbox=(1300, 1300),
+        bbox=(1400, 1400),
         margin=50,
         vertex_label_size=11,
         edge_arrow_size=0.5,
+        vertex_frame_width=0,
     )
 
     # Overlay legend on PNG using matplotlib
@@ -2623,6 +2646,7 @@ def visualize_gene_network_igraph(
 
     plots.append([pdf_path, description])
     plots.append([png_path, description])
+    plots.append([interaction_file, description])
     return plots
 
 
