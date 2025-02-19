@@ -13,4 +13,5 @@ ENV GRADIO_SERVER_NAME="0.0.0.0"
 
 # CMD ["python", "figchat_gradio.py"]
 
-CMD ["python", "-m", "chainlit", "run", "app.py", "-h", "--port", "7860", "--host", "0.0.0.0", "--root-path", "/figchat"]
+# CMD ["python", "-m", "chainlit", "run", "app.py", "-h", "--port", "7860", "--host", "0.0.0.0", "--root-path", "/figchat"]
+ENTRYPOINT ["python", "-m", "chainlit", "run", "app.py", "-h", "--port", "7860", "--host", "0.0.0.0", "--root-path", "/figchat"]

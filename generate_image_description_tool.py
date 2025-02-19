@@ -7,8 +7,9 @@ import pandas as pd
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from preload_datasets import TRAIN_IMAGE_DATA_FILE
+from preload_datasets import BASE_URL
 
-BASE_URL = "https://devapp.lungmap.net"  # <-- BASE URL for public image paths
+# BASE_URL = "https://devapp.lungmap.net"  # <-- BASE URL for public image paths
 
 # Initialize a lock for thread-safe file operations
 log_lock = threading.Lock()
