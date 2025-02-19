@@ -577,6 +577,7 @@ def visualization_tool(user_query: str) -> dict:
                     final_output[f"pdf_path_{j}"] = pdf
                 if tsv_path:
                     final_output["tsv_path"] = tsv_path
+                final_output["generated_config"] = config_data
                 print("Final output ready:", final_output)
                 return final_output
             except Exception as e:
@@ -624,6 +625,7 @@ def visualization_tool(user_query: str) -> dict:
                 final_output[f"pdf_path_{j}"] = pdf
             if tsv_path:
                 final_output["tsv_path"] = tsv_path
+            final_output["generated_config"] = config_data
             print("Final output ready:", final_output)
             return final_output
         except Exception as e:
