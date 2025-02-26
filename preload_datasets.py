@@ -1,9 +1,9 @@
 import scanpy as sc
 import pandas as pd
-import sqlite3
 import os
 from dotenv import load_dotenv
 from utils import parse_tsv_data
+import aiosqlite  # Updated: use aiosqlite for async database connection
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -33,6 +33,7 @@ def preload_dataset_index(file_path: str):
     except Exception as e:
         print(f"Error preloading dataset index: {e}")
 
+
 def preload_all_h5ad_files(base_dir: str):
     global PRELOADED_DATA
     if not os.path.isdir(base_dir):
@@ -53,6 +54,7 @@ def preload_all_h5ad_files(base_dir: str):
                     except Exception as e:
                         print(f"Error loading {file}: {e}")
 
+
 # Preload the dataset index
 if DATASET_INDEX_FILE:
     preload_dataset_index(DATASET_INDEX_FILE)
@@ -65,12 +67,34 @@ if BASE_DATASET_DIR:
 else:
     print("Error: BASE_DATASET_DIR is not set in the environment.")
 
-# Connect to the SQLite database
-if DATABASE_PATH:
-    try:
-        conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-        print("Successfully connected to the SQLite database.")
-    except Exception as e:
-        print(f"Error connecting to the database: {e}")
-else:
-    print("Error: DATABASE_PATH is not set in the environment.")
+
+# Asynchronous SQLite Connection
+async def get_db_conn():
+    if DATABASE_PATH:
+        try:
+            return await aiosqlite.connect(DATABASE_PATH)
+        except Exception as e:
+            print(f"Error connecting to the database asynchronously: {e}")
+            return None
+    else:
+        print("Error: DATABASE_PATH is not set in the environment.")
+        return None
+
+async def close_db_conn(conn):
+    if conn:
+        await conn.close()
+
+# Context manager for database connection
+class AsyncDBConnection:
+    def __init__(self):
+        self.conn = None
+
+    async def __aenter__(self):
+        self.conn = await get_db_conn()
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await close_db_conn(self.conn)
+
+# Use this instead of the global conn variable
+db = AsyncDBConnection()
