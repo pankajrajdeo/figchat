@@ -1,19 +1,14 @@
-# dataset_info_tool.py
 import os
 import json
 import pandas as pd
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 BASE_URL = "https://devapp.lungmap.net"  # Define BASE_URL for public file paths
 
-def general_parse_tsv(tsv_path: str) -> dict:
+def general_parse_tsv_sync(tsv_path: str) -> dict:
     """
-    A general TSV parsing function that uses pandas to parse a TSV file.
-    
-    Parameters:
-    - tsv_path (str): Path to the TSV file.
-    
-    Returns:
-    - dict: The TSV content converted to a dictionary (list of records).
+    Synchronous TSV parsing using pandas.
     """
     try:
         df = pd.read_csv(tsv_path, sep='\t')
@@ -21,7 +16,15 @@ def general_parse_tsv(tsv_path: str) -> dict:
     except Exception as e:
         raise ValueError(f"Error parsing TSV file: {e}")
 
-def dataset_info_tool(query: str = "", tsv_path: str = None) -> str:
+async def general_parse_tsv(tsv_path: str) -> dict:
+    """
+    Asynchronously parse a TSV file by running the synchronous version in a thread pool.
+    """
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as pool:
+        return await loop.run_in_executor(pool, general_parse_tsv_sync, tsv_path)
+
+async def dataset_info_tool(query: str = "", tsv_path: str = None) -> str:
     """
     Provides dataset information based on the context of the query.
 
@@ -30,8 +33,7 @@ def dataset_info_tool(query: str = "", tsv_path: str = None) -> str:
        - Uses the preloaded dataset metadata (from visualization_tool.PRELOADED_DATASET_INDEX).
        - Strips out the directory path field before returning the JSON string.
     2. General TSV Parsing Route:
-       - If a tsv_path is provided, parse that TSV file using a general TSV parsing function
-         and return its parsed output as JSON.
+       - If a tsv_path is provided, asynchronously parse that TSV file and return its parsed output as JSON.
          If the tsv_path begins with BASE_URL, remove that portion and use the relative path.
 
     Parameters:
@@ -47,7 +49,7 @@ def dataset_info_tool(query: str = "", tsv_path: str = None) -> str:
             relative_tsv_path = tsv_path
 
         try:
-            parsed_data = general_parse_tsv(relative_tsv_path)
+            parsed_data = await general_parse_tsv(relative_tsv_path)
             return json.dumps(parsed_data, indent=4)
         except Exception as e:
             return f"Error parsing TSV file '{relative_tsv_path}': {repr(e)}"
