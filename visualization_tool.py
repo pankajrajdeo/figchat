@@ -12,13 +12,16 @@ from utils import parse_tsv_data
 from preload_datasets import (
     PLOT_OUTPUT_DIR,
     DATASET_INDEX_FILE,
-    TRAIN_DATA_FILE
+    TRAIN_DATA_FILE,
+    db
 )
 import matplotlib
+matplotlib.use("Agg")
 import logging
 from matplotlib import rcParams
 from figure_generation import main
 import pandas as pd
+from langchain.schema import SystemMessage, HumanMessage
 
 BASE_URL = "https://devapp.lungmap.net"
 
@@ -113,7 +116,7 @@ Based on the user's query and the available dataset metadata, perform the follow
 
     2. **radar**
        - Displays average cell-type frequencies (proportions) across different conditions in a radial/spider chart.
-       - Best for a concise overview of composition changes (e.g., “How do cell types differ by disease?”).
+       - Best for a concise overview of composition changes (e.g., "How do cell types differ by disease?").
 
     3. **cell_frequency**
        - Shows per-donor box/violin plots of cell-type frequencies with statistical tests (e.g., Mann-Whitney U).
@@ -146,7 +149,7 @@ Based on the user's query and the available dataset metadata, perform the follow
 
     10. **network**
         - Displays gene interaction or regulatory networks.
-        - Use for requests involving “key transcriptional regulators,” “gene-gene interactions,” or regulatory relationships.
+        - Use for requests involving "key transcriptional regulators," "gene-gene interactions," or regulatory relationships.
 
     11. **stats**
         - Outputs a TSV file summarizing differentially expressed genes (DEGs) for the specified condition, cell type, or disease.
@@ -187,7 +190,7 @@ def get_dataset_metadata() -> str:
         data_to_dump = PRELOADED_DATASET_INDEX
     return json.dumps(data_to_dump, indent=4)
 
-def run_workflow1(user_query: str) -> Workflow1Model:
+async def run_workflow1(user_query: str) -> Workflow1Model:
     dataset_metadata_str = get_dataset_metadata()
     model = visualization_tool_llm_base
     chain = workflow1_prompt | model | workflow1_parser
@@ -199,8 +202,8 @@ def run_workflow1(user_query: str) -> Workflow1Model:
     }
     formatted_prompt = workflow1_prompt.format(**prompt_input)
     
-    # Invoke the chain and get the response
-    result: Workflow1Model = chain.invoke(prompt_input)
+    # Invoke the chain asynchronously and get the response
+    result = await chain.ainvoke(prompt_input)
     
     # Log the interaction
     append_log(
@@ -251,7 +254,7 @@ deg_check_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(format_instructions=degcheck_parser.get_format_instructions())
 
-def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: str) -> DEGCheckModel:
+async def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: str) -> DEGCheckModel:
     # Parse metadata to extract DEG information for the selected dataset
     all_metadata = json.loads(dataset_metadata_str)
     deg_metadata = "[]"
@@ -275,8 +278,8 @@ def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata_str: 
     }
     formatted_prompt = deg_check_prompt.format(**prompt_input)
     
-    # Invoke the chain and get the response
-    result: DEGCheckModel = chain.invoke(prompt_input)
+    # Invoke the chain asynchronously and get the response
+    result = await chain.ainvoke(prompt_input)
     
     # Post-process suggestion
     if result.deg_existence:
@@ -347,8 +350,8 @@ Plot Type: {plot_type}
 Below is the dataset metadata for the chosen dataset, which will help you determine valid field names, acceptable values, and constraints:
 {dataset_metadata}
 
-User Query (Refined):
-{refined_query}
+User Query:
+{user_query}
 
 ### Your Task:
 1. **Use Dataset Metadata:** Explicitly match field names and values to the metadata provided. If a user-provided value does not match, look for the closest valid match in the metadata (e.g., correcting "capilary" to "CAP1" if "CAP1" is valid in the metadata).
@@ -409,9 +412,9 @@ def get_plot_class(plot_type: str):
     else:
         raise ValueError(f"Unsupported or unknown plot_type: {plot_type}")
 
-def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str) -> str:
+async def plot_config_generator(dataset_name: str, plot_type: str, user_query: str) -> str:
     """
-    Generates the configuration for a plot based on the dataset, plot type, and refined query.
+    Generates the configuration for a plot based on the dataset, plot type, and user query.
     Includes conditional logic for handling restrict_studies and study_index for specific plot types.
     """
     # Validate dataset_name
@@ -434,7 +437,7 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     prompt_template = ChatPromptTemplate.from_messages(
         [
             ("system", THIRD_PROMPT_TEMPLATE),
-            ("human", "{refined_query}")
+            ("human", "{user_query}")
         ]
     ).partial(
         format_instructions=parser.get_format_instructions()
@@ -443,10 +446,10 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     # Add the dataset_name to the prompt formatting
     prompt_text = prompt_template.format(
         plot_type=plot_type,
-        dataset_name=dataset_name,  # Include the dataset name here
+        dataset_name=dataset_name,
         plot_description=plot_description,
         dataset_metadata=dataset_metadata_str,
-        refined_query=refined_query
+        user_query=user_query
     )
 
     # Use visualization_tool_llm_advanced only for heatmap and dotplot; otherwise use visualization_tool_llm_base.
@@ -458,10 +461,11 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     # Call the LLM and parse output using the chosen Pydantic class
     chain = prompt_template | model | parser
 
-    result_config = chain.invoke({
-        "refined_query": refined_query,
+    # Invoke the chain asynchronously
+    result_config = await chain.ainvoke({
+        "user_query": user_query,  # Changed from refined_query to user_query
         "dataset_metadata": dataset_metadata_str,
-        "dataset_name": dataset_name,  # Pass the dataset name dynamically
+        "dataset_name": dataset_name,
         "plot_description": plot_description,
         "plot_type": plot_type
     })
@@ -502,7 +506,7 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
     # Log the interaction
     append_log(
         workflow_name="Workflow3",
-        prompt=prompt_text,  # Assuming prompt_text contains the full prompt
+        prompt=prompt_text,
         response=final_json
     )
     
@@ -511,38 +515,88 @@ def plot_config_generator(dataset_name: str, plot_type: str, refined_query: str)
 # -----------------------------
 # Merged Functionality: Single "visualization_tool" that runs everything
 # -----------------------------
-
-def visualization_tool(user_query: str) -> dict:
+async def visualization_tool(user_query: str) -> dict:
     """
     Identifies relevant datasets, identifies appropriate plot_types, parses plot arguments, generates the plots,
     and returns the output plot paths in JSON format, including restrict_studies in the output.
     """
-    # 1) Run Workflow 1
-    print("=== Starting Workflow 1 ===")
-    w1_result = run_workflow1(user_query)
-    print("Workflow 1 completed. Results:", w1_result)
-    
-    # 2) Check if the plot type requires a DEG existence check
-    # Also, check if the query is about marker genes
-    if w1_result.plot_type in specified_plots and not w1_result.is_marker_genes:
-        print("=== Plot type requires DEG check. Starting Workflow 2 ===")
-        dataset_metadata_str = get_dataset_metadata()
-        w2_result = run_workflow2(user_query, w1_result.dataset_name, dataset_metadata_str)
-        print("Workflow 2 completed. Results:", w2_result)
-        if not w2_result.deg_existence:
-            print("DEG existence check failed. Terminating pipeline.")
-            return {
-                "output": "deg=false",
-                "dataset_name": w1_result.dataset_name,
-                "plot_type": w1_result.plot_type,
-                "reason": w1_result.reason,
-                "deg_existence": w2_result.deg_existence,
-                "suggestion": w2_result.suggestion
-            }
+    try:
+        # 1) Run Workflow 1
+        print("=== Starting Workflow 1 ===")
+        w1_result = await run_workflow1(user_query)
+        print("Workflow 1 completed. Results:", w1_result)
+        
+        # 2) Check if the plot type requires a DEG existence check
+        # Also, check if the query is about marker genes
+        if w1_result.plot_type in specified_plots and not w1_result.is_marker_genes:
+            print("=== Plot type requires DEG check. Starting Workflow 2 ===")
+            dataset_metadata_str = get_dataset_metadata()
+            w2_result = await run_workflow2(user_query, w1_result.dataset_name, dataset_metadata_str)
+            print("Workflow 2 completed. Results:", w2_result)
+            if not w2_result.deg_existence:
+                print("DEG existence check failed. Terminating pipeline.")
+                return {
+                    "output": "deg=false",
+                    "dataset_name": w1_result.dataset_name,
+                    "plot_type": w1_result.plot_type,
+                    "reason": w1_result.reason,
+                    "deg_existence": w2_result.deg_existence,
+                    "suggestion": w2_result.suggestion
+                }
+            else:
+                print("DEG existence confirmed. Proceeding to Workflow 3.")
+                try:
+                    # Use the original user_query as the refined_query
+                    config_json = await plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+                    print("Workflow 3 completed. Config JSON generated:", config_json)
+                    config_data = json.loads(config_json)
+                    restrict_studies = config_data.get("restrict_studies")
+                    os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
+                    output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
+                    with open(output_json_path, "w") as jf:
+                        jf.write(config_json)
+                    output_dir = PLOT_OUTPUT_DIR
+                    plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
+                    print("Figure generation outputs:", plot_outputs_raw)
+                    png_entries = []
+                    pdf_paths = []
+                    tsv_path = None
+                    for plot in plot_outputs_raw:
+                        if isinstance(plot, list) and len(plot) == 2:
+                            file_path = plot[0]
+                            if file_path.endswith(".pdf"):
+                                pdf_paths.append(f"{BASE_URL}{file_path}")
+                            elif file_path.endswith(".png"):
+                                png_entries.append((file_path, f"{BASE_URL}{file_path}"))
+                            elif file_path.endswith(".tsv"):
+                                tsv_path = f"{BASE_URL}{file_path}"
+                        else:
+                            raise ValueError(f"Unexpected plot format: {plot}")
+                    final_output = {
+                        "plot_type": w1_result.plot_type.upper(),
+                        "restrict_studies (restricted to following study/studies)": restrict_studies,
+                    }
+                    for i, (local_path, url) in enumerate(png_entries, start=1):
+                        final_output[f"png_path_{i}"] = url
+                    for j, pdf in enumerate(pdf_paths, start=1):
+                        final_output[f"pdf_path_{j}"] = pdf
+                    if tsv_path:
+                        final_output["tsv_path"] = tsv_path
+                    final_output["generated_config"] = config_data
+                    print("Final output ready:", final_output)
+                    return final_output
+                except Exception as e:
+                    error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
+                    print(error_msg)
+                    return {"error": error_msg}
         else:
-            print("DEG existence confirmed. Proceeding to Workflow 3.")
+            if w1_result.is_marker_genes:
+                print("=== Query specifies marker genes. Bypassing Workflow 2 and starting Workflow 3 ===")
+            else:
+                print("=== Plot type does not require DEG check. Starting Workflow 3 directly ===")
             try:
-                config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
+                # Use the original user_query as the refined_query
+                config_json = await plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
                 print("Workflow 3 completed. Config JSON generated:", config_json)
                 config_data = json.loads(config_json)
                 restrict_studies = config_data.get("restrict_studies")
@@ -584,51 +638,7 @@ def visualization_tool(user_query: str) -> dict:
                 error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
                 print(error_msg)
                 return {"error": error_msg}
-    else:
-        if w1_result.is_marker_genes:
-            print("=== Query specifies marker genes. Bypassing Workflow 2 and starting Workflow 3 ===")
-        else:
-            print("=== Plot type does not require DEG check. Starting Workflow 3 directly ===")
-        try:
-            config_json = plot_config_generator(w1_result.dataset_name, w1_result.plot_type, user_query)
-            print("Workflow 3 completed. Config JSON generated:", config_json)
-            config_data = json.loads(config_json)
-            restrict_studies = config_data.get("restrict_studies")
-            os.makedirs(PLOT_OUTPUT_DIR, exist_ok=True)
-            output_json_path = os.path.join(PLOT_OUTPUT_DIR, "plot_config.json")
-            with open(output_json_path, "w") as jf:
-                jf.write(config_json)
-            output_dir = PLOT_OUTPUT_DIR
-            plot_outputs_raw = main(json_input=output_json_path, output_dir=output_dir)
-            print("Figure generation outputs:", plot_outputs_raw)
-            png_entries = []
-            pdf_paths = []
-            tsv_path = None
-            for plot in plot_outputs_raw:
-                if isinstance(plot, list) and len(plot) == 2:
-                    file_path = plot[0]
-                    if file_path.endswith(".pdf"):
-                        pdf_paths.append(f"{BASE_URL}{file_path}")
-                    elif file_path.endswith(".png"):
-                        png_entries.append((file_path, f"{BASE_URL}{file_path}"))
-                    elif file_path.endswith(".tsv"):
-                        tsv_path = f"{BASE_URL}{file_path}"
-                else:
-                    raise ValueError(f"Unexpected plot format: {plot}")
-            final_output = {
-                "plot_type": w1_result.plot_type.upper(),
-                "restrict_studies (restricted to following study/studies)": restrict_studies,
-            }
-            for i, (local_path, url) in enumerate(png_entries, start=1):
-                final_output[f"png_path_{i}"] = url
-            for j, pdf in enumerate(pdf_paths, start=1):
-                final_output[f"pdf_path_{j}"] = pdf
-            if tsv_path:
-                final_output["tsv_path"] = tsv_path
-            final_output["generated_config"] = config_data
-            print("Final output ready:", final_output)
-            return final_output
-        except Exception as e:
-            error_msg = f"Error in Workflow 3 or figure_generation: {repr(e)}"
-            print(error_msg)
-            return {"error": error_msg}
+    except Exception as e:
+        error_msg = f"Error in visualization pipeline: {repr(e)}"
+        print(error_msg)
+        return {"error": error_msg}
