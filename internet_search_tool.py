@@ -1,10 +1,9 @@
-# internet_search_tool.py
 import json
 from langchain_community.tools import DuckDuckGoSearchResults
 
-def internet_search_tool(query: str, num_results: int = 5) -> list:
+async def internet_search_tool(query: str, num_results: int = 5) -> list:
     """
-    Performs an internet search using DuckDuckGo and retrieves detailed results in JSON format.
+    Performs an internet search using DuckDuckGo and retrieves detailed results in JSON format asynchronously.
 
     Parameters:
         query (str): The search query to perform.
@@ -16,17 +15,13 @@ def internet_search_tool(query: str, num_results: int = 5) -> list:
     try:
         # Initialize the DuckDuckGo Search Tool
         search_tool_instance = DuckDuckGoSearchResults(output_format="json")
-
-        # Perform the search query
-        search_results = search_tool_instance.invoke(query)
-
-        # Parse the search results into a Python object
+        # Perform the search query asynchronously
+        search_results = await search_tool_instance.ainvoke(query)
+        # Parse the search results into a Python object if needed
         if isinstance(search_results, str):
             search_results = json.loads(search_results)
-
         # Limit the results to the specified number
         detailed_results = search_results[:num_results]
-
         return detailed_results
     except Exception as e:
         raise RuntimeError(f"Error performing search: {repr(e)}")
