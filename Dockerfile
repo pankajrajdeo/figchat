@@ -2,7 +2,7 @@
 FROM python:3.10-slim
 
 RUN apt update
-RUN apt install -y gcc pkg-config cmake libcairo2-dev libjpeg-dev libgif-dev
+RUN apt install -y gcc pkg-config cmake libcairo2-dev libjpeg-dev libgif-dev libpq-dev
 
 WORKDIR /usr/src/app
 COPY . .
