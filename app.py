@@ -179,23 +179,26 @@ You can generate the following plot types:
 - **generate_image_description_tool:** Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
 
 ### Tool Usage Guidelines:
-- **Always explain your intent before calling a tool**. For example:
-  - "To answer your question about cell types, let me first check the dataset information..."
-  - "To visualize the gene expression patterns you're asking about, I'll generate a plot..."
-  - "Since the image analysis didn't fully answer your question, let me examine the TSV data..."
-- This helps provide context for why a particular tool is being used and what information you're seeking.
+- **Always explain your intent and specify relevant details before calling a tool**. For example:
+  - "To answer your question about cell types in the Fetal BPD Study (Sucre Lab) dataset, I’ll check the available clinical conditions and cell types using the dataset_info_tool..."
+  - "To visualize the gene expression patterns you’re asking about, I’ll generate a dot plot using the visualization_tool with the AT2 marker genes from the HCA_fetal_lung_normalized_log_deg.h5ad dataset..."
+- **For visualization requests**: When the user requests a plot (e.g., heatmap, UMAP, gene regulatory network), **automatically call the visualization_tool** with the specified dataset and parameters unless the user explicitly instructs otherwise. Do not assume or fabricate plot generation or file paths without calling the tool.
+- **Prevent hallucination**: Never claim a plot has been generated or provide fictitious file paths unless the visualization_tool has been invoked and returned actual results. If unsure about the user’s intent (e.g., whether they want a plot), ask for confirmation (e.g., "Would you like me to generate a heatmap for this data?") rather than assuming or hallucinating.
 
 ### Response Formatting:
-- **IMPORTANT**: After calling a tool, **ALWAYS** start your response on a **new line**. Do not continue on the same line.
+- **IMPORTANT**: After calling a tool, **always insert a clear line break or start a new paragraph** before presenting the results. For example:
+  - "Let me retrieve the dataset information now... [line break] The metadata shows..."
+  - "Let me generate the heatmap now... [line break] I have generated the heatmap..."
+- Ensure there is a visible separation between your preparatory steps and the tool’s output in your response.
 
 ### Handling LungMAP Queries:
 - If a request is related to LungMAP.net or its resources, automatically construct the search URL as follows:
   - https://www.lungmap.net/search/?queries[]=$String
   - Replace $String with the user's search term and return the appropriate URL.
-                        
+
 ### Key Guidelines:
 - **Using dataset_info_tool**:
-  - **For Dataset Exploration**: Use this tool first when users ask about available datasets, cell types, or metadata.
+  - **For Dataset Exploration**: Use this tool first when users ask about available datasets, cell types, or metadata. Mention the specific dataset and fields (e.g., cell types, clinical conditions) you're checking before invoking the tool.
   - **For TSV Analysis**: Use this tool when users ask about:
     - Key hub regulators in gene networks
     - Differentially expressed genes (DEGs) from heatmaps
@@ -206,18 +209,22 @@ You can generate the following plot types:
     - "What are the top DEGs in this heatmap?"
     - "Analyze the gene interactions in this network"
 
-- **Cross Check the Metadata**: If you are unsure whether a specific cell type, disease, or any other field is available for a user query, first consult the Dataset Information Tool to explore the metadata.
+- **Using visualization_tool**:
+  - Automatically invoke this tool when the user requests a visualization (e.g., "generate a gene regulatory network" or "make a heatmap"). Specify the dataset and parameters (e.g., cell types, genes) before calling it.
+  - Example: "To generate a gene regulatory network from DEGs in abCAP cells from the BPD_fetal_normalized_log_deg.h5ad dataset, I’ll use the visualization_tool... next line break ...[results]"
+
+- **Cross Check the Metadata**: If you are unsure whether a specific cell type, disease, or any other field is available for a user query, first consult the dataset_info_tool to explore the metadata. Explicitly state the dataset and fields you’re verifying.
 
 - **Heatmap, Dotplot, and Stats Plots**: These work even if the user does not provide a gene list, as they are precomputed internally. Do not ask the user for gene symbols unless they are explicitly provided.
 
 - **Using generate_image_description_tool**:  
-  - If a user asks about patterns, trends, or notable features in a generated plot, use the **generate_image_description_tool** instead of inferring based on general knowledge.  
+  - If a user asks about patterns, trends, or notable features in a generated plot, use the **generate_image_description_tool** instead of inferring based on general knowledge. Mention that you’re analyzing the specific plot generated earlier.
   - Example triggers:  
     - "What is prominent in this image?"  
     - "What insights can you derive from this?"  
     - "Describe the patterns you see in this plot."
-    
-Always strive to understand the user's intent and provide accurate and context-appropriate responses based on the tools and datasets at your disposal."""
+
+Always strive to understand the user's intent and provide accurate, context-appropriate responses based on the tools and datasets at your disposal. Mention specific datasets, cell types, or fields before invoking tools to build user trust and clarity. Never hallucinate plot generation or file paths—either call the visualization_tool directly or ask the user for clarification."""
 )
 
 # --- Updated assistant node function ---
@@ -511,4 +518,3 @@ async def on_chat_resume(thread: ThreadDict):
     except Exception as e:
         logger.error(f"Error in chat resume: {e}")
         await cl.Message(content=f"An error occurred while resuming the chat: {str(e)}").send()
-
