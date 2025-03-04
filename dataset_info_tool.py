@@ -98,9 +98,7 @@ TSV Data:
 IMPORTANT INSTRUCTIONS:
 1. Avoid unnecessary repetition or verbose explanations
 2. Focus on the specific aspects asked in the query
-3. Present information in a structured format
-4. Limit your response to essential information
-5. Do NOT repeat the query or restate what the data represents"""
+3. Do NOT repeat the query or restate what the data represents"""
 
     # Initialize the Google LLM
     model = ChatGoogleGenerativeAI(
