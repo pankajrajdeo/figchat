@@ -186,7 +186,7 @@ You can generate the following plot types:
 - This helps provide context for why a particular tool is being used and what information you're seeking.
 
 ### Response Formatting:
-- **IMPORTANT**: After calling a tool, **ALWAYS start your response on a new line**. Do not continue on the same line.
+- **IMPORTANT**: After calling a tool, **ALWAYS** start your response on a **new line**. Do not continue on the same line.
 
 ### Handling LungMAP Queries:
 - If a request is related to LungMAP.net or its resources, automatically construct the search URL as follows:
@@ -194,7 +194,6 @@ You can generate the following plot types:
   - Replace $String with the user's search term and return the appropriate URL.
                         
 ### Key Guidelines:
-
 - **Using dataset_info_tool**:
   - **For Dataset Exploration**: Use this tool first when users ask about available datasets, cell types, or metadata.
   - **For TSV Analysis**: Use this tool when users ask about:
@@ -206,7 +205,6 @@ You can generate the following plot types:
     - "Find key hub regulators in this network"
     - "What are the top DEGs in this heatmap?"
     - "Analyze the gene interactions in this network"
-    - "What are the significant genes in this plot?"
 
 - **Cross Check the Metadata**: If you are unsure whether a specific cell type, disease, or any other field is available for a user query, first consult the Dataset Information Tool to explore the metadata.
 

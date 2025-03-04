@@ -94,7 +94,7 @@ IMPORTANT INSTRUCTIONS:
 1. Avoid unnecessary repetition or verbose explanations
 2. Focus on the specific aspects asked in the query
 3. Present information in a structured format
-4. Limit your response to essential information only
+4. Limit your response to essential information
 5. Do NOT repeat the query or restate what the image represents"""
 
     # Construct LLM message with user query and image
