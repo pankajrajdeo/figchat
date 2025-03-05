@@ -24,7 +24,6 @@ if not GOOGLE_API_KEY:
 def resolve_tsv_path(tsv_path: str) -> str:
     """
     Resolve the TSV file path, handling both full paths and paths relative to BASE_DATASET_DIR.
-    Also handles network interaction TSV files from the plot output directory.
     
     Parameters:
     - tsv_path: The provided TSV file path
@@ -42,12 +41,11 @@ def resolve_tsv_path(tsv_path: str) -> str:
     if os.path.isabs(relative_path):
         return relative_path
     
-    # Check if it's a network interactions file
-    if relative_path.endswith('network_interactions.tsv'):
-        if PLOT_OUTPUT_DIR:
-            return os.path.join(PLOT_OUTPUT_DIR, relative_path)
-        else:
-            raise ValueError("PLOT_OUTPUT_DIR environment variable is not set. Please set it in your .env file.")
+    # Check if file exists in PLOT_OUTPUT_DIR first if available
+    if PLOT_OUTPUT_DIR:
+        potential_path = os.path.join(PLOT_OUTPUT_DIR, os.path.basename(relative_path))
+        if os.path.exists(potential_path):
+            return potential_path
     
     # Otherwise, resolve relative to BASE_DATASET_DIR
     return os.path.join(BASE_DATASET_DIR, relative_path)
@@ -87,6 +85,10 @@ async def analyze_tsv_with_llm(tsv_data: dict, query: str) -> str:
     # Convert TSV data to a string representation
     tsv_str = json.dumps(tsv_data, indent=2)
     
+    # If no specific query is provided, create a default query for explanation
+    if not query or query.strip() == "":
+        query = "Explain the content of this TSV file. Summarize what information it contains."
+    
     # Construct the prompt with instructions for concise responses
     prompt = f"""Analyze the following TSV data and answer the query concisely.
     
@@ -95,10 +97,7 @@ Query: {query}
 TSV Data:
 {tsv_str}
 
-IMPORTANT INSTRUCTIONS:
-1. Avoid unnecessary repetition or verbose explanations
-2. Focus on the specific aspects asked in the query
-3. Do NOT repeat the query or restate what the data represents"""
+"""
 
     # Initialize the Google LLM
     model = ChatGoogleGenerativeAI(
@@ -138,13 +137,16 @@ async def Dataset_Explorer(query: str = "", tsv_path: str = None) -> str:
             resolved_path = resolve_tsv_path(tsv_path)
             parsed_data = await general_parse_tsv(resolved_path)
             
+            # Ensure query is always a non-empty string
+            analysis_query = query.strip() if query else "Explain the structure and content of this TSV file"
+            
             # Use LLM to analyze the TSV data
-            analysis = await analyze_tsv_with_llm(parsed_data, query)
+            analysis = await analyze_tsv_with_llm(parsed_data, analysis_query)
             
             # Return structured response
             return json.dumps({
                 "tsv_path": resolved_path,
-                "query": query,
+                "query": analysis_query,
                 "analysis": analysis,
                 "timestamp": pd.Timestamp.now().isoformat()
             }, indent=4)
