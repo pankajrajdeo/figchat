@@ -167,12 +167,17 @@ import visualization_tool
 import dataset_info_tool
 import internet_search_tool
 import generate_image_description_tool
+import code_generation_tool
 
 # Pass the preloaded data to the tools
 visualization_tool.PRELOADED_DATA = PRELOADED_DATA
 visualization_tool.PRELOADED_DATASET_INDEX = PRELOADED_DATASET_INDEX
 visualization_tool.PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
 dataset_info_tool.PRELOADED_DATASET_INDEX = PRELOADED_DATASET_INDEX
+code_generation_tool.PRELOADED_DATASET_INDEX = PRELOADED_DATASET_INDEX
+code_generation_tool.PRELOADED_DATA = PRELOADED_DATA
+code_generation_tool.PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
+code_generation_tool.BASE_DATASET_DIR = os.getenv("BASE_DATASET_DIR")
 
 # Define LLM and Tools
 llm = ChatOpenAI(
@@ -185,7 +190,8 @@ tools = [
     visualization_tool.visualization_tool,
     dataset_info_tool.dataset_info_tool,
     internet_search_tool.internet_search_tool,
-    generate_image_description_tool.generate_image_description_tool
+    generate_image_description_tool.generate_image_description_tool,
+    code_generation_tool.code_generation_tool
 ]
 
 # Bind the tools to the LLM
@@ -232,21 +238,25 @@ You can generate the following plot types:
   - Provide a TSV file path in your query to parse and display the contents of that file.
 - **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 - **generate_image_description_tool**: Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
+- **code_generation_tool**: Use this tool to generate and execute custom Python code for complex analyses that are not covered by the standard visualization and dataset tools. This tool is particularly useful for advanced users who need to perform specific data manipulations or analyses that require custom code execution.
 
 ### Tool Usage Guidelines:
 - **Always explain your intent and specify relevant details before calling a tool**. For example:
   - "To answer your question about cell types in the Fetal BPD Study (Sucre Lab) dataset, I'll check the available clinical conditions and cell types..."
   - "To visualize the gene expression patterns you're asking about, I'll generate a dot plot with the AT2 marker genes..."
-- **For visualization requests**: When the user requests a plot (e.g., heatmap, UMAP, gene regulatory network), **call the visualization_tool** with the appropriate parameters unless the user explicitly instructs otherwise. The tool will select the most relevant dataset based on the query.
+- **For visualization requests**: When the user requests a plot (e.g., heatmap, UMAP, gene regulatory network), **call the visualization_tool** with the appropriate parameters unless the user explicitly instructs otherwise. The tool will select the most relevant dataset based on the query. For each generated visualization, ALWAYS show ALL PNG images directly in your response using Markdown image syntax `![Description](image_url)`. If multiple PNG images are generated, display ALL of them. For PDFs, TSVs, and other non-image outputs, provide clickable links to ALL generated files.
+- **For custom code generation**: When the user requests a specific analysis or data manipulation that requires custom code, **call the code_generation_tool** to generate and execute the necessary Python code.
 - **Never mention the tool name in your response**.
 
 ### IMPORTANT:
 - **Do not hallucinate**: Never claim a plot has been generated or provide fictitious file paths unless the visualization_tool has been invoked and returned actual results. Under no circumstances hallucinate plot generation or file paths; always invoke the visualization_tool or ask the user for clarification first.
 - **Mandatory Tool Invocation**: You must always call the appropriate tool before providing any specific details or confirmations; fabricating or assuming outputs without tool invocation is strictly prohibited—if uncertain, you must ask the user for clarification (e.g., "Would you like me to generate a heatmap for this data?").
+- **Image Display**: When visualization_tool generates plots, ALWAYS display ALL PNG images inline using Markdown image syntax: `![Description](image_url)` instead of just providing download links. If multiple PNG images are generated for a single plot type, display ALL of them in your response. Specifically, for EACH png_path returned by the tool, include the full image in your response using Markdown image syntax. For other output types (PDF files, TSV files, etc.), provide clickable links to ALL of them in your response.
 - **Response Formatting**: After calling a tool, always insert a clear line break or start a new paragraph before presenting the results. For example:
   - "Let me retrieve the dataset information now... \n\n The metadata shows..."
   - "Let me generate the heatmap now... \n\n I have generated the heatmap..."
-
+  - "Let me generate the code now... \n\n I have generated the code..."
+  - "Let me create UMAP visualizations... \n\n Here are the UMAPs showing cell clusters: \n\n ![UMAP Visualization 1](https://example.com/plot1.png) \n\n ![UMAP Visualization 2](https://example.com/plot2.png) \n\n You can also download the PDF versions ([PDF 1](https://example.com/plot1.pdf), [PDF 2](https://example.com/plot2.pdf)) or access the raw data ([TSV 1](https://example.com/data1.tsv), [TSV 2](https://example.com/data2.tsv)) for further analysis."
 ### Handling LungMAP Queries:
 - If a request is related to LungMAP.net or its resources, automatically construct the search URL as follows:
   - https://www.lungmap.net/search/?queries[]=$String
@@ -260,11 +270,14 @@ You can generate the following plot types:
   - Gene regulatory networks or interactions
   - Specific patterns in plots that generate TSV files (e.g., heatmaps, networks, volcano plots)
   - Example triggers: "Find key hub regulators in this network," "What are the top DEGs in this heatmap?"
-- **Visualization Requests**: Invoke the visualization_tool for requests like "generate a gene regulatory network" or "make a heatmap." Specify parameters (e.g., cell types, genes) if provided; otherwise, the tool selects the dataset.
+- **Visualization Requests**: Invoke the visualization_tool for requests like "generate a gene regulatory network" or "make a heatmap." Specify parameters (e.g., cell types, genes) if provided; otherwise, the tool selects the dataset. For each generated visualization, ALWAYS show ALL PNG images directly in your response using Markdown image syntax `![Description](image_url)`. If multiple images are generated for a single plot type, display ALL of them. Additionally, include clickable links for ALL PDF files, TSV files, and other non-image outputs to give users easy access to all generated resources.
 - **Metadata Verification**: If unsure about a specific cell type, disease, or field availability, consult the dataset_info_tool to explore the metadata, stating the dataset and fields you're verifying.
 - **Precomputed Plots**: Heatmaps, dot plots, and stats plots work without a user-provided gene list (precomputed internally). Do not ask for gene symbols unless explicitly provided.
 - **Image Analysis**: For questions about patterns, trends, or features in a generated plot (e.g., "What is prominent in this image?"), use the generate_image_description_tool, mentioning you're analyzing the specific plot.
-
+- **Code Generation**: Use the code_generation_tool in the following cases:
+  - When the user explicitly requests a custom TSV file (e.g., "Give me a custom TSV file with AT2 cell data"), custom data output (e.g., "Provide custom data for BPD samples"), or a custom plot not covered by visualization_tool (e.g., "Create a custom plot of gene expression trends over time").
+  - As a fallback: If the visualization_tool, dataset_info_tool, or other tools cannot fulfill the user's request (e.g., the requested plot type or data manipulation isn't supported), attempt to use the code_generation_tool to generate custom code to meet the need, explaining: "The standard tools couldn't address this directly, so I'll generate custom code to handle your request. This may take a few minutes."
+  - Provide the parameters for code generation as well as the dataset_name if specified; otherwise, it automatically selects the most relevant dataset.
 Always strive to understand the user's intent and provide accurate, context-appropriate responses based on the tools and datasets at your disposal. Mention specific datasets, cell types, or fields before invoking tools to build user trust and clarity."""
 )
 
@@ -364,6 +377,9 @@ async def on_message(message: cl.Message):
         configurable=thread_config["configurable"]
     )
 
+    # Define tools that require suppression of internal LLM streaming
+    suppress_streaming_tools = {"Data_Visualizer", "Code_Generator", "Dataset_Explorer", "Image_Analyzer", "Web_Search"}
+    
     try:
         # Create a streaming message for the main assistant response
         ui_message = cl.Message(content="")
@@ -377,9 +393,9 @@ async def on_message(message: cl.Message):
         chain_sequence = []  # Track chain sequence
         current_chain_depth = 0  # Track chain nesting
         
-        # Track if we're currently in a visualization tool execution
-        in_visualization_tool = False
-        visualization_tool_name = "Data_Visualizer"
+        # Track if we're currently in a tool execution that suppresses streaming
+        in_suppress_streaming_tool = False
+        current_suppress_tool = None
         
         # For SFT data collection
         streamed_before_tool = ""  # Track content streamed before first tool call
@@ -410,21 +426,17 @@ async def on_message(message: cl.Message):
                 current_chain_depth = max(0, current_chain_depth - 1)
 
             elif event["event"] == "on_chat_model_stream":
-                # Only stream tokens from the main assistant, not from internal LLM chains
-                # Check if we're in a visualization tool execution
-                if in_visualization_tool:
-                    # For visualization tool, we'll only log but not stream to UI
+                if in_suppress_streaming_tool:
+                    # For tools requiring suppression, log but don't stream to UI
                     content = event["data"]["chunk"].content
                     if content:
-                        logger.debug(f"Visualization tool LLM output (not streamed): {content[:50]}...")
+                        logger.debug(f"{current_suppress_tool} internal LLM output (not streamed): {content[:50]}...")
                 else:
                     # For the main assistant, stream to UI as normal
                     content = event["data"]["chunk"].content
                     if content:
                         await ui_message.stream_token(content)
                         logger.debug(f"Streamed token: {content[:20]}...")
-                        
-                        # For SFT data collection: capture content streamed before any tool call
                         if not has_tool_call and content:
                             streamed_before_tool += content
             
@@ -433,19 +445,11 @@ async def on_message(message: cl.Message):
 
                 # Merge "input" and "kwargs" so we never lose the user query or the TSV path
                 merged_input = {}
-                
-                # If "input" is a dict, merge it
                 if isinstance(event["data"].get("input"), dict):
                     merged_input.update(event["data"]["input"])
-                
-                # If "kwargs" is a dict, merge it
                 if isinstance(event["data"].get("kwargs"), dict):
                     merged_input.update(event["data"]["kwargs"])
-                
-                # If both are empty or not dicts, you can default to empty dict
                 tool_input_dict = merged_input
-
-                # Convert to string for logging
                 tool_input_str = str(tool_input_dict)
 
                 logger.info(f"\nTool Execution Started: {tool_name} | input: {tool_input_str}")
@@ -454,27 +458,23 @@ async def on_message(message: cl.Message):
                     indent = "  " * depth
                     logger.info(f"{indent}{seq}")
                 
-                # Set flag for tool call detection
                 has_tool_call = True
                 current_tool_outputs[tool_name] = ""
-                current_tool_inputs[tool_name] = tool_input_str  # So SFT logs have both query & tsv
+                current_tool_inputs[tool_name] = tool_input_str
 
-                # If this is the visualization tool
-                if tool_name == visualization_tool_name:
-                    in_visualization_tool = True
-                    logger.info("Entered visualization tool execution - suppressing internal LLM streaming")
+                if tool_name in suppress_streaming_tools:
+                    in_suppress_streaming_tool = True
+                    current_suppress_tool = tool_name
+                    logger.info(f"Entered {tool_name} execution - suppressing internal LLM streaming")
 
-                # Create a step
                 step = cl.Step(name=tool_name, type="tool", show_input=False)
                 await step.__aenter__()
                 tool_steps[tool_name] = step
                 
             elif event["event"] == "on_tool_end":
-                # Handle tool output (log but don't display in UI)
                 tool_name = event["name"]
                 tool_output = str(event["data"]["output"])
                 if tool_output:
-                    # Store the tool output but don't stream to UI
                     current_tool_outputs[tool_name] = tool_output
                     logger.info(f"\nTool {tool_name} completed")
                     logger.info("Chain sequence during tool execution:")
@@ -482,10 +482,8 @@ async def on_message(message: cl.Message):
                         indent = "  " * depth
                         logger.info(f"{indent}{seq}")
                     
-                    # Log the tool output for debugging
                     logger.debug(f"Tool output for {tool_name}: {tool_output[:100]}...")
                     
-                    # Add to collected tool calls for SFT data
                     collected_tool_calls.append({
                         "tool_name": tool_name,
                         "tool_input": current_tool_inputs.get(tool_name, ""),
@@ -493,20 +491,18 @@ async def on_message(message: cl.Message):
                         "preamble": streamed_before_tool if streamed_before_tool else ""
                     })
                     
-                    # Update the step with the output but then remove it to keep UI clean
                     if tool_name in tool_steps:
                         step = tool_steps[tool_name]
                         step.output = tool_output
                         await step.__aexit__(None, None, None)
-                        await step.remove()  # Remove the step to keep the UI clean
-                
-                # Check if we're exiting the visualization tool
-                if tool_name == visualization_tool_name:
-                    in_visualization_tool = False
-                    logger.info("Exited visualization tool execution - resuming normal streaming")
+                        await step.remove()
+
+                if tool_name in suppress_streaming_tools:
+                    in_suppress_streaming_tool = False
+                    current_suppress_tool = None
+                    logger.info(f"Exited {tool_name} execution - resuming normal streaming")
             
             elif event["event"] == "on_chain_end" and event["name"] == "LangGraph":
-                # Update state when the graph execution completes
                 state = event["data"]["output"]
                 cl.user_session.set("state", state)
                 logger.debug("Graph execution completed")
@@ -515,25 +511,20 @@ async def on_message(message: cl.Message):
                     indent = "  " * depth
                     logger.info(f"{indent}{seq}")
 
-        # Update the final message
         await ui_message.update()
         
-        # Get the final content for chat history
         final_content = ui_message.content
         chat_history.append({"role": "assistant", "content": final_content})
         cl.user_session.set("chat_history", chat_history)
         logger.debug(f"Updated chat history with AI response. Total messages: {len(chat_history)}")
         
-        # Collect SFT training data
         interaction_type = "direct_response"
         if has_tool_call:
-            # Check if there was text before the tool call
             if streamed_before_tool and streamed_before_tool.strip():
                 interaction_type = "explanatory_tool_call"
             else:
                 interaction_type = "direct_tool_call"
         
-        # Log the SFT training data
         append_sft_log(
             user_message=message.content,
             assistant_response=final_content,
