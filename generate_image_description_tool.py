@@ -7,7 +7,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
-from preload_datasets import TRAIN_IMAGE_DATA_FILE
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +17,10 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable is not set. Please set it in your .env file.")
 
+# Define training data file path in standardized location
+BASE_DATASET_DIR = os.environ.get("BASE_DATASET_DIR", "")
+TRAIN_IMAGE_DATA_FILE = os.path.join(BASE_DATASET_DIR, "training_data", "image_descriptions_training_data.json")
+
 # Initialize a lock for thread-safe file operations
 log_lock = threading.Lock()
 
@@ -26,6 +29,9 @@ def load_image_log() -> dict:
     Load the existing log from TRAIN_IMAGE_DATA_FILE.
     If the file doesn't exist, initialize with an empty structure.
     """
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(TRAIN_IMAGE_DATA_FILE), exist_ok=True)
+    
     if not os.path.exists(TRAIN_IMAGE_DATA_FILE):
         return {"image_descriptions": []}
 
@@ -107,7 +113,7 @@ IMPORTANT INSTRUCTIONS:
     model = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=GOOGLE_API_KEY,
-        temperature=0.3
+        temperature=0
     )
     
     response = model.invoke([message])
