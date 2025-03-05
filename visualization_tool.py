@@ -12,7 +12,6 @@ from utils import parse_tsv_data
 from preload_datasets import (
     PLOT_OUTPUT_DIR,
     DATASET_INDEX_FILE,
-    TRAIN_DATA_FILE,
     db
 )
 import matplotlib
@@ -24,6 +23,10 @@ import pandas as pd
 from langchain.schema import SystemMessage, HumanMessage
 
 BASE_URL = "https://devapp.lungmap.net"
+
+# Define training data file path in standardized location
+BASE_DATASET_DIR = os.environ.get("BASE_DATASET_DIR", "")
+TRAIN_DATA_FILE = os.path.join(BASE_DATASET_DIR, "training_data", "visualization_tool_training_data.json")
 
 # -----------------------------
 # LLM
@@ -49,6 +52,9 @@ def load_log() -> dict:
     Load the existing log from the TRAIN_DATA_FILE.
     If the file doesn't exist, initialize with an empty structure.
     """
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(TRAIN_DATA_FILE), exist_ok=True)
+    
     if not os.path.exists(TRAIN_DATA_FILE):
         return {"workflows": []}
 
