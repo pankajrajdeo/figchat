@@ -131,7 +131,7 @@ async def set_starters():
         ),
         cl.Starter(
             label="UMAP Visualization",
-            message="Please display side-by-side UMAPs of each clinical condition in the Sucre Lab BPD dataset, colored by the cell types that are present in each.",
+            message="Please display side-by-side UMAPs of each clinical condition in the Sucre Lab BPD dataset, colored by the cell types that are present in each condition.",
             icon="public/scatter-plot-svgrepo-com.svg"
         ),
         cl.Starter(
