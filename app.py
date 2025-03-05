@@ -429,10 +429,26 @@ async def on_message(message: cl.Message):
                             streamed_before_tool += content
             
             elif event["event"] == "on_tool_start":
-                # Log when a tool starts execution (internal only)
                 tool_name = event["name"]
-                tool_input = event["data"]["input"]  # Capture tool input for SFT
-                logger.info(f"\nTool Execution Started: {tool_name}")
+
+                # Merge "input" and "kwargs" so we never lose the user query or the TSV path
+                merged_input = {}
+                
+                # If "input" is a dict, merge it
+                if isinstance(event["data"].get("input"), dict):
+                    merged_input.update(event["data"]["input"])
+                
+                # If "kwargs" is a dict, merge it
+                if isinstance(event["data"].get("kwargs"), dict):
+                    merged_input.update(event["data"]["kwargs"])
+                
+                # If both are empty or not dicts, you can default to empty dict
+                tool_input_dict = merged_input
+
+                # Convert to string for logging
+                tool_input_str = str(tool_input_dict)
+
+                logger.info(f"\nTool Execution Started: {tool_name} | input: {tool_input_str}")
                 logger.info("Chain sequence up to tool start:")
                 for depth, seq in chain_sequence:
                     indent = "  " * depth
@@ -441,14 +457,14 @@ async def on_message(message: cl.Message):
                 # Set flag for tool call detection
                 has_tool_call = True
                 current_tool_outputs[tool_name] = ""
-                current_tool_inputs[tool_name] = tool_input  # Store tool input
-                
-                # Check if this is the visualization tool
+                current_tool_inputs[tool_name] = tool_input_str  # So SFT logs have both query & tsv
+
+                # If this is the visualization tool
                 if tool_name == visualization_tool_name:
                     in_visualization_tool = True
                     logger.info("Entered visualization tool execution - suppressing internal LLM streaming")
-                
-                # Create a step but don't display it in the main UI flow
+
+                # Create a step
                 step = cl.Step(name=tool_name, type="tool", show_input=False)
                 await step.__aenter__()
                 tool_steps[tool_name] = step
