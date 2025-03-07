@@ -418,6 +418,31 @@ def get_plot_class(plot_type: str):
     else:
         raise ValueError(f"Unsupported or unknown plot_type: {plot_type}")
 
+def sanitize_config_paths(config_data: dict) -> dict:
+    """
+    Sanitize paths in the configuration to hide absolute system paths.
+    Only for display purposes and does not affect execution.
+    
+    Parameters:
+    - config_data: The configuration data dictionary
+    
+    Returns:
+    - dict: A copy of the configuration with sanitized paths
+    """
+    # Make a deep copy to avoid modifying the original
+    import copy
+    sanitized_config = copy.deepcopy(config_data)
+    
+    # Check for adata_file path and sanitize it if present
+    if "adata_file" in sanitized_config and sanitized_config["adata_file"]:
+        adata_path = sanitized_config["adata_file"]
+        # Extract the dataset name from the path
+        dataset_name = os.path.basename(os.path.dirname(adata_path))
+        # Create a simplified path
+        sanitized_config["adata_file"] = f"/path/to/h5ad/{dataset_name}.h5ad"
+        
+    return sanitized_config
+
 async def plot_config_generator(dataset_name: str, plot_type: str, user_query: str) -> str:
     """
     Generates the configuration for a plot based on the dataset, plot type, and user query.
@@ -523,8 +548,7 @@ async def plot_config_generator(dataset_name: str, plot_type: str, user_query: s
 # -----------------------------
 async def Data_Visualizer(user_query: str) -> dict:
     """
-    Identifies relevant datasets, identifies appropriate plot_types, parses plot arguments, generates the plots,
-    and returns the output plot paths in JSON format, including restrict_studies in the output.
+    Generates visualizations based on user queries, creating plots, PDFs, and TSV data files.
     """
     try:
         # 1) Run Workflow 1
@@ -588,7 +612,9 @@ async def Data_Visualizer(user_query: str) -> dict:
                         final_output[f"pdf_path_{j}"] = pdf
                     if tsv_path:
                         final_output["tsv_path"] = tsv_path
-                    final_output["generated_config"] = config_data
+                    # Sanitize config paths before adding to final output
+                    sanitized_config = sanitize_config_paths(config_data)
+                    final_output["generated_config"] = sanitized_config
                     print("Final output ready:", final_output)
                     return final_output
                 except Exception as e:
@@ -637,7 +663,9 @@ async def Data_Visualizer(user_query: str) -> dict:
                     final_output[f"pdf_path_{j}"] = pdf
                 if tsv_path:
                     final_output["tsv_path"] = tsv_path
-                final_output["generated_config"] = config_data
+                # Sanitize config paths before adding to final output
+                sanitized_config = sanitize_config_paths(config_data)
+                final_output["generated_config"] = sanitized_config
                 print("Final output ready:", final_output)
                 return final_output
             except Exception as e:
