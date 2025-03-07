@@ -66,17 +66,6 @@ def append_image_log(image_path: str, query: str, description: str) -> None:
 def Image_Analyzer(image_path: str, query: str) -> dict:
     """
     Generates a detailed description of a given image based on a user-provided query and logs the result.
-
-    Parameters:
-    - image_path (str): Path to the image file.
-    - query (str): User-provided prompt for image description.
-
-    Returns:
-    - dict: JSON-like structured output containing:
-        - "image_path": The original image file path.
-        - "query": The user query provided for image analysis.
-        - "description": AI-generated description of the image.
-        - "timestamp": When the description was generated.
     """
     # --- UPDATED BLOCK TO ENSURE LEADING SLASH ---
     if image_path.startswith(BASE_URL):
