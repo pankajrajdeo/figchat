@@ -238,14 +238,15 @@ You can generate the following plot types:
   - Provide a TSV file path in your query to parse and display the contents of that file.
 - **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 - **generate_image_description_tool**: Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
-- **code_generation_tool**: Use this tool to generate and execute custom Python code for complex analyses that are not covered by the standard visualization and dataset tools. This tool is particularly useful for advanced users who need to perform specific data manipulations or analyses that require custom code execution.
+- **code_generation_tool**: Use this tool to generate and execute custom Python code for complex analyses that are not covered by the standard visualization and dataset tools and also when the user provides a file for analysis. This tool is particularly useful for advanced users who need to perform specific data manipulations or analyses that require custom code execution.
 
 ### Tool Usage Guidelines:
 - **Always explain your intent and specify relevant details before calling a tool**. For example:
   - "To answer your question about cell types in the Fetal BPD Study (Sucre Lab) dataset, I'll check the available clinical conditions and cell types..."
   - "To visualize the gene expression patterns you're asking about, I'll generate a dot plot with the AT2 marker genes..."
+  - "I see you've provided a TSV file. I'll analyze this file to generate the bar chart you requested..."
 - **For visualization requests**: When the user requests a plot (e.g., heatmap, UMAP, gene regulatory network), **call the visualization_tool** with the appropriate parameters unless the user explicitly instructs otherwise. The tool will select the most relevant dataset based on the query. For each generated visualization, ALWAYS show ALL PNG images directly in your response using Markdown image syntax `![Description](image_url)`. If multiple PNG images are generated, display ALL of them. For PDFs, TSVs, and other non-image outputs, provide clickable links to ALL generated files.
-- **For custom code generation**: When the user requests a specific analysis or data manipulation that requires custom code, **call the code_generation_tool** to generate and execute the necessary Python code.
+- **For custom code generation**: When the user requests a specific analysis or data manipulation or provides a file for analysis that requires custom code, **call the code_generation_tool** to generate and execute the necessary Python code.
 - **Never mention the tool name in your response**.
 - **Reusing previous tool outputs**: When a user asks to see the code or configuration used to generate a previous output:
   - For **code_generation_tool**: Present the code that was used (or failed code with error) from the previous tool call output without invoking the tool again. Format as: "Here is your requested plot\nFollowing code was used to generate this plot: [code]"
@@ -279,7 +280,7 @@ You can generate the following plot types:
 - **Precomputed Plots**: Heatmaps, dot plots, and stats plots work without a user-provided gene list (precomputed internally). Do not ask for gene symbols unless explicitly provided.
 - **Image Analysis**: For questions about patterns, trends, or features in a generated plot (e.g., "What is prominent in this image?"), use the generate_image_description_tool, mentioning you're analyzing the specific plot.
 - **Code Generation**: Use the code_generation_tool in the following cases:
-  - When the user explicitly requests a custom TSV file (e.g., "Give me a custom TSV file with AT2 cell data"), custom data output (e.g., "Provide custom data for BPD samples"), or a custom plot not covered by visualization_tool (e.g., "Create a custom plot of gene expression trends over time").
+  - When the user explicitly requests a custom TSV file (e.g., "Give me a custom TSV file with AT2 cell data"), custom data output (e.g., "Provide custom data for BPD samples"), or a custom plot not covered by visualization_tool (e.g., "Create a custom plot of gene expression trends over time") or user provides a file for analysis (e.g., "Create a bar chart from this TSV file").
   - As a fallback: If the visualization_tool, dataset_info_tool, or other tools cannot fulfill the user's request (e.g., the requested plot type or data manipulation isn't supported), attempt to use the code_generation_tool to generate custom code to meet the need, explaining: "The standard tools couldn't address this directly, so I'll generate custom code to handle your request. This may take a few minutes."
   - Provide the parameters for code generation as well as the dataset_name if specified; otherwise, it automatically selects the most relevant dataset.
 Always strive to understand the user's intent and provide accurate, context-appropriate responses based on the tools and datasets at your disposal. Mention specific datasets, cell types, or fields before invoking tools to build user trust and clarity."""
@@ -494,6 +495,33 @@ async def on_message(message: cl.Message):
                         "tool_output": tool_output,
                         "preamble": streamed_before_tool if streamed_before_tool else ""
                     })
+                    
+                    # Special handling for Code_Generator tool: ensure it's fully completed
+                    # by checking if the output is valid JSON that includes final output fields
+                    if tool_name == "Code_Generator":
+                        try:
+                            # Check if the output is valid JSON
+                            output_data = json.loads(tool_output)
+                            # Check if it contains the expected final output fields
+                            # that would indicate the tool has fully executed
+                            if not (isinstance(output_data, dict) and all(k in output_data for k in ['content', 'code'])):
+                                logger.warning(f"Code_Generator tool may have returned prematurely, incomplete output: {tool_output[:100]}...")
+                                # Skip updating the UI step to avoid marking as complete
+                                # This will allow future completions of the same tool to be processed
+                                if tool_name in suppress_streaming_tools:
+                                    in_suppress_streaming_tool = False
+                                    current_suppress_tool = None
+                                    logger.info(f"Exited {tool_name} execution - resuming normal streaming")
+                                continue
+                        except (json.JSONDecodeError, TypeError, ValueError):
+                            # If we can't parse the output as JSON, it might be an intermediate output or error
+                            logger.warning(f"Code_Generator tool output is not valid JSON, may be incomplete: {tool_output[:100]}...")
+                            # Skip updating the UI step to avoid marking as complete
+                            if tool_name in suppress_streaming_tools:
+                                in_suppress_streaming_tool = False
+                                current_suppress_tool = None
+                                logger.info(f"Exited {tool_name} execution - resuming normal streaming")
+                            continue
                     
                     if tool_name in tool_steps:
                         step = tool_steps[tool_name]
