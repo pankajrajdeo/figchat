@@ -132,10 +132,6 @@ async def analyze_tsv_with_llm(tsv_data: dict, query: str) -> str:
     # Convert TSV data to a string representation
     tsv_str = json.dumps(tsv_data, indent=2)
     
-    # If no specific query is provided, create a default query for explanation
-    if not query or query.strip() == "":
-        query = "Explain the content of this TSV file. Summarize what information it contains."
-    
     # Construct the prompt with instructions for concise responses
     prompt = f"""Analyze the following TSV data and answer the query concisely.
     
@@ -171,22 +167,23 @@ async def Dataset_Explorer(query: str = "", tsv_path: str = None) -> str:
                 resolved_path = resolve_tsv_path(tsv_path)
                 parsed_data = await general_parse_tsv(resolved_path)
                 
-                # Ensure query is always a non-empty string
-                analysis_query = query.strip() if query else "Explain the structure and content of this TSV file"
+                # Ensure query is non-empty
+                if not query or query.strip() == "":
+                    return "Error: A query is required when providing a TSV file for analysis. Please specify what you want to analyze about this file."
                 
                 # Use LLM to analyze the TSV data
-                analysis = await analyze_tsv_with_llm(parsed_data, analysis_query)
+                analysis = await analyze_tsv_with_llm(parsed_data, query)
                 
                 # Prepare structured response
                 response = json.dumps({
                     "tsv_path": resolved_path,
-                    "query": analysis_query,
+                    "query": query,
                     "analysis": analysis,
                     "timestamp": pd.Timestamp.now().isoformat()
                 }, indent=4)
                 
                 # Log the interaction
-                append_log(analysis_query, resolved_path, response)
+                append_log(query, resolved_path, response)
                 
                 return response
             except Exception as e:
