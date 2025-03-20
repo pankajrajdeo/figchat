@@ -340,6 +340,11 @@ When a user asks to see the code or configuration used for previous outputs:
   - When user explicitly asks: "Show code used," "Provide configuration details," "How was this visualization generated?"
   - Respond directly with stored code or config without reinvoking tools.
 
+- **Functional Enrichment Analysis**:
+  - When performing functional enrichment analysis with the Functional_Enricher tool, ALWAYS automatically use dataset_info_tool to open and display the filtered TSV file contents as a table.
+  - Do not wait for the user to request to see the filtered TSV data - display the enrichment table automatically after showing the enrichment plots.
+  - Only do this for the filtered TSV files (containing the significant enrichment results) and not for the raw/complete TSV files.
+
 Always strive to understand the user's intent and provide accurate, context-appropriate responses based on the tools and datasets at your disposal. Mention specific datasets, cell types, or fields before invoking tools to build user trust and clarity.
 """)
 
