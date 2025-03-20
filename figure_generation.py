@@ -563,6 +563,9 @@ def main(json_input, output_dir="results"):
 
     if plot_type == 'volcano' or plot_type == 'all':
         plots = plot_volcano(cell_type, disease, gene_symbols, plots=plots)
+        output_file = sanitize_filename(f"{root}/Genes-{cell_type}_{disease}_{direction}.tsv")
+        filtered_df.to_csv(output_file, sep="\t", index=False)
+        plots.append([output_file, f"Differentially expressed {direction} genes in {cell_type} by {disease}"])
 
     if plot_type == 'dotplot' or plot_type == 'all':
         # Capture the return value here
