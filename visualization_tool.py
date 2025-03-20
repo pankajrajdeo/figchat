@@ -590,7 +590,7 @@ async def Data_Visualizer(user_query: str) -> dict:
                     print("Figure generation outputs:", plot_outputs_raw)
                     png_entries = []
                     pdf_paths = []
-                    tsv_path = None
+                    tsv_paths = []
                     for plot in plot_outputs_raw:
                         if isinstance(plot, list) and len(plot) == 2:
                             file_path = plot[0]
@@ -599,7 +599,7 @@ async def Data_Visualizer(user_query: str) -> dict:
                             elif file_path.endswith(".png"):
                                 png_entries.append((file_path, f"{BASE_URL}{file_path}"))
                             elif file_path.endswith(".tsv"):
-                                tsv_path = f"{BASE_URL}{file_path}"
+                                tsv_paths.append(f"{BASE_URL}{file_path}")
                         else:
                             raise ValueError(f"Unexpected plot format: {plot}")
                     final_output = {
@@ -610,8 +610,8 @@ async def Data_Visualizer(user_query: str) -> dict:
                         final_output[f"png_path_{i}"] = url
                     for j, pdf in enumerate(pdf_paths, start=1):
                         final_output[f"pdf_path_{j}"] = pdf
-                    if tsv_path:
-                        final_output["tsv_path"] = tsv_path
+                    for k, tsv in enumerate(tsv_paths, start=1):
+                        final_output[f"tsv_path_{k}"] = tsv
                     # Sanitize config paths before adding to final output
                     sanitized_config = sanitize_config_paths(config_data)
                     final_output["generated_config"] = sanitized_config
@@ -641,7 +641,7 @@ async def Data_Visualizer(user_query: str) -> dict:
                 print("Figure generation outputs:", plot_outputs_raw)
                 png_entries = []
                 pdf_paths = []
-                tsv_path = None
+                tsv_paths = []
                 for plot in plot_outputs_raw:
                     if isinstance(plot, list) and len(plot) == 2:
                         file_path = plot[0]
@@ -650,7 +650,7 @@ async def Data_Visualizer(user_query: str) -> dict:
                         elif file_path.endswith(".png"):
                             png_entries.append((file_path, f"{BASE_URL}{file_path}"))
                         elif file_path.endswith(".tsv"):
-                            tsv_path = f"{BASE_URL}{file_path}"
+                            tsv_paths.append(f"{BASE_URL}{file_path}")
                     else:
                         raise ValueError(f"Unexpected plot format: {plot}")
                 final_output = {
@@ -661,8 +661,8 @@ async def Data_Visualizer(user_query: str) -> dict:
                     final_output[f"png_path_{i}"] = url
                 for j, pdf in enumerate(pdf_paths, start=1):
                     final_output[f"pdf_path_{j}"] = pdf
-                if tsv_path:
-                    final_output["tsv_path"] = tsv_path
+                for k, tsv in enumerate(tsv_paths, start=1):
+                    final_output[f"tsv_path_{k}"] = tsv
                 # Sanitize config paths before adding to final output
                 sanitized_config = sanitize_config_paths(config_data)
                 final_output["generated_config"] = sanitized_config
