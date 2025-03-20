@@ -168,6 +168,7 @@ import dataset_info_tool
 import internet_search_tool
 import generate_image_description_tool
 import code_generation_tool
+import functional_enrichment_tool
 
 # Pass the preloaded data to the tools
 visualization_tool.PRELOADED_DATA = PRELOADED_DATA
@@ -178,6 +179,7 @@ code_generation_tool.PRELOADED_DATASET_INDEX = PRELOADED_DATASET_INDEX
 code_generation_tool.PRELOADED_DATA = PRELOADED_DATA
 code_generation_tool.PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
 code_generation_tool.BASE_DATASET_DIR = os.getenv("BASE_DATASET_DIR")
+functional_enrichment_tool.PLOT_OUTPUT_DIR = os.getenv("PLOT_OUTPUT_DIR")
 
 # Define LLM and Tools
 llm = ChatOpenAI(
@@ -191,7 +193,8 @@ tools = [
     dataset_info_tool.dataset_info_tool,
     internet_search_tool.internet_search_tool,
     generate_image_description_tool.generate_image_description_tool,
-    code_generation_tool.code_generation_tool
+    code_generation_tool.code_generation_tool,
+    functional_enrichment_tool.Functional_Enricher
 ]
 
 # Bind the tools to the LLM
@@ -228,13 +231,14 @@ You can generate the following plot types:
 - UpSet Plots
 
 ### Tools Available:
-- **visualization_tool**: Use this tool to generate visualizations based on the user's query. The tool will automatically select the most appropriate dataset based on the query content. You can customize the plot using observation columns (e.g., "cell_type", "disease", or other metadata fields).
+- **visualization_tool**: Use this tool to generate visualizations based on the user's query. The tool will automatically select the most appropriate dataset based on the query content. You can customize the plot using observation columns (e.g., "cell_type", "disease", or other metadata fields). **Always include the plot configuration JSON with the generated plots to show the configuration used.**
 - **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets. **Note:** You can either:
   - Retrieve the preloaded metadata (default route) which shows all dataset details, or
   - Provide a TSV file path in your query to parse and display the contents of that file.
 - **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
 - **generate_image_description_tool**: Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
 - **code_generation_tool**: Use this tool to generate and execute custom Python code for complex analyses that are not covered by the standard visualization and dataset tools and also when the user provides a file for analysis. This tool is particularly useful for advanced users who need to perform specific data manipulations or analyses that require custom code execution.
+- **Functional_Enricher**: Use this tool to perform gene functional enrichment analysis (GFEA) using the ToppGene API. It automatically extracts gene symbols from the user's query and identifies requested enrichment categories. If no specific categories are mentioned, it uses all available categories. The tool returns enrichment results as visualizations (PNG/PDF) and data files (TSV), with paths that can be used for further analysis.
 
 ### Tool Usage Guidelines:
 
@@ -253,6 +257,7 @@ You can generate the following plot types:
 Examples of effective preambles:
 - "To create a Venn diagram illustrating the overlap of marker genes among AT1, AT2, and AT2 proliferating cells, let me find out the relevant datasets. Now, I know the relevant datasets, I'll generate the visualization using the relevant datasets. Let me do that now."
 - "To generate a gene interaction network plot using the Human Lung Cell Atlas (HLCA) dataset, I will proceed with identifying relevant parameters and data features necessary for the visualization. I'll initiate the process now."
+- "To perform functional enrichment analysis on the genes FOXJ1, FOXI1, and FOXC2, I'll use the ToppGene API to identify significant biological pathways, gene ontology terms, and disease associations. Let me run that analysis for you now."
 
 **Visualization Requests:**
 - Always invoke visualization_tool for requested plots (heatmaps, UMAPs, gene networks).
@@ -260,6 +265,13 @@ Examples of effective preambles:
 - If multiple PNG images are generated, display ALL of them.
 - Provide clickable links for ALL non-image outputs (PDF, TSV, etc.).
 - Clearly note when visualizations produce TSV files, enabling further analysis.
+
+**Gene Functional Enrichment Analysis:**
+- For gene enrichment or pathway analysis requests, use the Functional_Enricher.
+- The tool automatically extracts gene symbols from the user's query.
+- It also determines which enrichment categories to use (e.g., pathway, GO terms, disease).
+- Display the generated plots inline and provide links to the detailed results.
+- Explain the key findings from the enrichment analysis in an accessible way.
 
 **Reusing Previous Tool Outputs:**
 When a user asks to see the code or configuration used for previous outputs:
@@ -320,7 +332,7 @@ When a user asks to see the code or configuration used for previous outputs:
 - **Custom Code Generation**: Use code_generation_tool for:
   - Explicit requests for custom TSV or data outputs (FIRST TRY DATASET_EXPLORER TOOL).
   - Complex plots or analyses beyond visualization_tool capabilities.
-  - Analyzing TSV or similar files generated by visualization_tool.
+  - Analyzing TSV or similar files generated by visualization_tool. **BUT ONLY IF THE USER EXPLICITLY ASKS FOR IT. OTHERWISE, USE DATASET_EXPLORER TOOL FIRST TO READ THE TSV FILE.**
   - Example usage for file analysis: `code_generation_tool(user_query="Create a bar chart from heatmap data", file_input=result["file_path"])`
   - As a fallback when other tools cannot fulfill requests, explaining: "The standard tools couldn't address this directly, so I'll generate custom code to handle your request."
 
@@ -428,7 +440,7 @@ async def on_message(message: cl.Message):
     )
 
     # Define tools that require suppression of internal LLM streaming
-    suppress_streaming_tools = {"Data_Visualizer", "Code_Generator", "Dataset_Explorer", "Image_Analyzer", "Web_Search"}
+    suppress_streaming_tools = {"Data_Visualizer", "Code_Generator", "Dataset_Explorer", "Image_Analyzer", "Web_Search", "Functional_Enricher"}
     
     try:
         # Create a streaming message for the main assistant response
@@ -569,6 +581,17 @@ async def on_message(message: cl.Message):
                                 cl.user_session.set("last_tsv_path", tsv_path)
                         except (json.JSONDecodeError, TypeError, ValueError) as e:
                             logger.warning(f"Failed to extract tsv_path from Data_Visualizer output: {str(e)}")
+                    
+                    # Extract filtered_tsv from Functional_Enricher output and store it in the session
+                    if tool_name == "Functional_Enricher":
+                        try:
+                            output_data = json.loads(tool_output)
+                            if isinstance(output_data, dict) and "filtered_tsv" in output_data:
+                                tsv_path = output_data["filtered_tsv"]
+                                logger.info(f"Extracted filtered_tsv from Functional_Enricher: {tsv_path}")
+                                cl.user_session.set("last_tsv_path", tsv_path)
+                        except (json.JSONDecodeError, TypeError, ValueError) as e:
+                            logger.warning(f"Failed to extract filtered_tsv from Functional_Enricher output: {str(e)}")
                     
                     # Special handling for Code_Generator tool: ensure it's fully completed
                     # by checking if the output is valid JSON that includes final output fields
