@@ -16,7 +16,11 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 # Base URL for file paths
 BASE_URL = "https://devapp.lungmap.net"
-PLOT_OUTPUT_DIR = None  # Will be set from app_code.py
+PLOT_OUTPUT_DIR = os.getenv('PLOT_OUTPUT_DIR')
+
+# Print warning if PLOT_OUTPUT_DIR is not set
+if not PLOT_OUTPUT_DIR:
+    print("Warning: PLOT_OUTPUT_DIR environment variable is not set. Using current directory for plots.")
 
 def sanitize_filename(filename, max_length=200):
     """
@@ -291,6 +295,9 @@ class FunctionalEnricher:
             pdf_filename = f"{filename_base}.pdf"
             png_filename = f"{filename_base}.png"
 
+            # Ensure parent directories exist
+            os.makedirs(os.path.dirname(pdf_filename), exist_ok=True)
+            
             with PdfPages(pdf_filename) as pdf:
                 for i, (cat, results) in enumerate(categories.items()):
                     ax = axes[i]
@@ -365,23 +372,26 @@ class FunctionalEnricher:
         selected_filter = all_possible if selected_categories == ["all"] else selected_categories
 
         # Add BASE_URL to paths for web access
-        # First convert absolute paths to relative paths from PLOT_OUTPUT_DIR
         if PLOT_OUTPUT_DIR:
-            plot_output_dir_prefix = PLOT_OUTPUT_DIR
-            if png_path and png_path.startswith(plot_output_dir_prefix):
-                png_path = png_path[len(plot_output_dir_prefix):].lstrip('/')
-            if pdf_path and pdf_path.startswith(plot_output_dir_prefix):
-                pdf_path = pdf_path[len(plot_output_dir_prefix):].lstrip('/')
-            if raw_tsv and raw_tsv.startswith(plot_output_dir_prefix):
-                raw_tsv = raw_tsv[len(plot_output_dir_prefix):].lstrip('/')
-            if filtered_tsv and filtered_tsv.startswith(plot_output_dir_prefix):
-                filtered_tsv = filtered_tsv[len(plot_output_dir_prefix):].lstrip('/')
+            # Ensure proper path joining by handling slashes correctly
+            # Remove trailing slash from BASE_URL if exists
+            base_url = BASE_URL.rstrip('/')
+            # Ensure PLOT_OUTPUT_DIR starts with a slash
+            plot_dir = PLOT_OUTPUT_DIR if PLOT_OUTPUT_DIR.startswith('/') else f"/{PLOT_OUTPUT_DIR}"
+            
+            # Construct clean web URLs that include the full PLOT_OUTPUT_DIR path
+            output["png_path"] = f"{base_url}{plot_dir}/{os.path.basename(png_path)}" if png_path else ""
+            output["pdf_path"] = f"{base_url}{plot_dir}/{os.path.basename(pdf_path)}" if pdf_path else ""
+            output["raw_tsv"] = f"{base_url}{plot_dir}/{os.path.basename(raw_tsv)}" if raw_tsv else ""
+            output["filtered_tsv"] = f"{base_url}{plot_dir}/{os.path.basename(filtered_tsv)}" if filtered_tsv else ""
+        else:
+            # If PLOT_OUTPUT_DIR is not set, fall back to the previous behavior
+            output["png_path"] = f"{BASE_URL}/{os.path.basename(png_path)}" if png_path else ""
+            output["pdf_path"] = f"{BASE_URL}/{os.path.basename(pdf_path)}" if pdf_path else ""
+            output["raw_tsv"] = f"{BASE_URL}/{os.path.basename(raw_tsv)}" if raw_tsv else ""
+            output["filtered_tsv"] = f"{BASE_URL}/{os.path.basename(filtered_tsv)}" if filtered_tsv else ""
         
-        # Prepare the final output dictionary
-        output["png_path"] = f"{BASE_URL}/{png_path}" if png_path else ""
-        output["pdf_path"] = f"{BASE_URL}/{pdf_path}" if pdf_path else ""
-        output["raw_tsv"] = f"{BASE_URL}/{raw_tsv}" if raw_tsv else ""
-        output["filtered_tsv"] = f"{BASE_URL}/{filtered_tsv}" if filtered_tsv else ""
+        # Add filter_by information
         output["filter_by"] = {
             "selected_categories": selected_filter,
             "applied_QValueFDRBH_threshold": 0.05,
