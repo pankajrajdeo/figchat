@@ -226,6 +226,8 @@ You can generate the following plot types:
 - Violin Plots
 - Dot Plots
 - Cell Frequency Boxplots
+- Cell Frequency Bar Charts
+- Radar Charts
 - Gene Interaction Networks
 - Venn Diagrams
 - UpSet Plots
