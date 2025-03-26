@@ -94,8 +94,8 @@ class Workflow1Model(BaseModel):
     dataset_name: Optional[Literal[
         "HLCA_full_superadata_v3_norm_log_deg.h5ad",
         "HCA_fetal_lung_normalized_log_deg.h5ad",
-        "BPD_infant_Sun_normalized_log_deg.h5ad",
-        "BPD_fetal_normalized_log_deg.h5ad"
+        "BPD_Sun_normalized_log_deg.h5ad",
+        "BPD_Sucre_normalized_log_deg.h5ad"
     ]]
     reason: str
     plot_type: Literal[
@@ -505,8 +505,8 @@ async def plot_config_generator(dataset_name: str, plot_type: str, user_query: s
     ADATA_FILE_PATH_MAP = {
         "HLCA_full_superadata_v3_norm_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "HLCA_full_superadata_v3_norm_log_deg", "HLCA_full_superadata_v3_norm_log_deg.h5ad"),
         "HCA_fetal_lung_normalized_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "HCA_fetal_lung_normalized_log_deg", "HCA_fetal_lung_normalized_log_deg.h5ad"),
-        "BPD_infant_Sun_normalized_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "BPD_infant_Sun_normalized_log_deg", "BPD_infant_Sun_normalized_log_deg.h5ad"),
-        "BPD_fetal_normalized_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "BPD_fetal_normalized_log_deg", "BPD_fetal_normalized_log_deg.h5ad"),
+        "BPD_Sun_normalized_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "BPD_Sun_normalized_log_deg", "BPD_Sun_normalized_log_deg.h5ad"),
+        "BPD_Sucre_normalized_log_deg.h5ad": os.path.join(os.environ.get("BASE_DATASET_DIR"), "BPD_Sucre_normalized_log_deg", "BPD_Sucre_normalized_log_deg.h5ad"),
     }
 
     # Replace the adata_file path if recognized
