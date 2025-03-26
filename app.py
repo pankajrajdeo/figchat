@@ -212,12 +212,14 @@ sys_msg = SystemMessage(content="""You are **LungChat**, an advanced assistant f
    - Source: Wellcome HCA Strategic Science Support
 
 3. **Infant BPD Study (Sun Lab)**:
-   - Single-nucleus RNA sequencing of infants with bronchopulmonary dysplasia (BPD) to study alveolar dysplasia in premature lungs.
+   - Infant BPD study (24 samples: 13 BPD cases, 11 controls) using single-nucleus RNA-Seq to examine alveolar dysplasia in premature infants aged 4 months to 3 years who died from BPD complications.
    - Source: LungMAP (Sun lab)
+   - Dataset: BPD_Sun_normalized_log_deg.h5ad
 
-4. **Fetal BPD Study (Sucre Lab)**:
-   - Single-cell RNA sequencing of preterm infant lungs to explore endothelial and alveolar dysfunction in early-stage BPD and BPD+PH.
+4. **Neonatal BPD Study (Sucre Lab)**:
+   - Neonatal BPD study examining cellular dynamics in preterm infants, revealing aberrant capillary cell-state in BPD+PH cases and deficits in semaphorin signaling pathway, with samples from NICU autopsies and surgical biopsies.
    - Source: LungMAP (Sucre lab)
+   - Dataset: BPD_Sucre_normalized_log_deg.h5ad
 
 ### Visualization Capabilities:
 You can generate the following plot types:
