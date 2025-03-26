@@ -1,4 +1,3 @@
-#code_generation_tool.py
 import os
 import json
 import re
@@ -199,8 +198,8 @@ class Workflow1Model(BaseModel):
     dataset_name: Optional[Literal[
         "HLCA_full_superadata_v3_norm_log_deg.h5ad",
         "HCA_fetal_lung_normalized_log_deg.h5ad",
-        "BPD_infant_Sun_normalized_log_deg.h5ad",
-        "BPD_fetal_normalized_log_deg.h5ad",
+        "BPD_Sun_normalized_log_deg.h5ad",
+        "BPD_Sucre_normalized_log_deg.h5ad",
         "ALL"
     ]]
 
@@ -500,12 +499,12 @@ Instructions:
 - For the 'content' field, use the full raw output and prepend 'https://devapp.lungmap.net' to any file paths (e.g., paths starting with '/' or containing '.tsv', '.png', etc.) within it, preserving all other text.
 **IMPORTANT**
  - ALWAYS PREPEND 'https://devapp.lungmap.net' TO THE FILE PATHS IN THE RAW OUTPUT.
- - MAKE SURE TO REPLACE THE DATASET PATHS IN THE GENERATED CODE WITH '/path_to/<dataset_name>' for each dataset used (e.g., '/path_to/BPD_fetal_normalized_log_deg.h5ad') if a dataset is used.
+ - MAKE SURE TO REPLACE THE DATASET PATHS IN THE GENERATED CODE WITH '/path_to/<dataset_name>' for each dataset used (e.g., '/path_to/BPD_Sucre_normalized_log_deg.h5ad') if a dataset is used.
  - MAKE SURE TO REPLACE THE FILE INPUT PATHS IN THE GENERATED CODE WITH '/path_to/<filename>' (e.g., '/path_to/venn_overlapping_markers_42693.tsv') if a file input is used.
  - MAKE SURE TO REPLACE THE OUTPUT DIRECTORIES IN THE GENERATED CODE WITH 'path_to_output_directory'.
 - If the raw output contains an error (e.g., 'Traceback', 'Error', 'Exception'), include it in the 'error' field and set 'content' to 'Error occurred during execution'.
 - Include the selected dataset(s) in 'selected_dataset' (for a single dataset) or 'selected_datasets' (for multiple) if datasets are used; otherwise, leave as null if only a file input is used.
-- Populate 'dataset_path_placeholder' with the dataset path used (e.g., '/path_to/BPD_fetal_normalized_log_deg.h5ad') if a dataset is used, or the file input path (e.g., '/path_to/venn_overlapping_markers_42693.tsv') if a file input is used, or leave as null if multiple datasets are used.
+- Populate 'dataset_path_placeholder' with the dataset path used (e.g., '/path_to/BPD_Sucre_normalized_log_deg.h5ad') if a dataset is used, or the file input path (e.g., '/path_to/venn_overlapping_markers_42693.tsv') if a file input is used, or leave as null if multiple datasets are used.
 - Set 'output_directory_placeholder' to 'path_to_output_directory'.
 
 Output a single JSON object matching the schema.
@@ -601,8 +600,8 @@ async def Code_Generator(user_query: str, file_input: Optional[str] = None) -> s
             datasets = [
                 "HLCA_full_superadata_v3_norm_log_deg.h5ad",
                 "HCA_fetal_lung_normalized_log_deg.h5ad",
-                "BPD_infant_Sun_normalized_log_deg.h5ad",
-                "BPD_fetal_normalized_log_deg.h5ad"
+                "BPD_Sun_normalized_log_deg.h5ad",
+                "BPD_Sucre_normalized_log_deg.h5ad"
             ]
             selected_datasets = datasets if dataset_name.upper() == "ALL" else [dataset_name]
         
