@@ -61,7 +61,7 @@ def parse_tsv_data(file_path):
                                'feature_biotype', 'feature_length', 'feature_type']
             }
         },
-        "BPD_infant_Sun_normalized_log_deg.h5ad": {
+        "BPD_Sun_normalized_log_deg.h5ad": {
             "shape": (271381, 36601),
             "X_dtype": "float64",
             "obs_fields": ['sample_id', 'donor_id', 'disease', 'species', 'age', 'sex', 'pna', 'ga', 'pma', 'perc_pma',
@@ -78,7 +78,7 @@ def parse_tsv_data(file_path):
             "uns_keys": ['disease_comparison_summary', 'disease_stats', 'interaction_data', 'marker_stats', 'rank_genes_groups'],
             "layers_keys": []
         },
-        "BPD_fetal_normalized_log_deg.h5ad": {
+        "BPD_Sucre_normalized_log_deg.h5ad": {
             "shape": (43607, 36601),
             "X_dtype": "float64",
             "obs_fields": ['orig.ident', 'nCount_RNA', 'nFeature_RNA', 'percent.mt', 'dataset', 'age', 'condition', 
@@ -150,13 +150,13 @@ def parse_tsv_data(file_path):
                 "level_1": "broad_celltype",
                 "level_2": "cell_type"
             }
-        elif h5ad_name == "BPD_infant_Sun_normalized_log_deg.h5ad":
+        elif h5ad_name == "BPD_Sun_normalized_log_deg.h5ad":
             lineage_levels = {
                 "level_1": "lineage_level1",
                 "level_2": "lineage_level2",
                 "level_3": "cell type"
             }
-        elif h5ad_name == "BPD_fetal_normalized_log_deg.h5ad":
+        elif h5ad_name == "BPD_Sucre_normalized_log_deg.h5ad":
             lineage_levels = {
                 "level_1": "celltype_lineage",
                 "level_2": "celltype"
