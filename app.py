@@ -127,32 +127,32 @@ async def set_starters():
         cl.Starter(
             label="Explore Available Datasets",
             message="Please list the datasets, sampled tissues, and clinical conditions that you are able to allow me to explore.",
-            icon="public/data-analysis-svgrepo-com.svg"
+            icon="/public/data-analysis-svgrepo-com.svg"
         ),
         cl.Starter(
             label="UMAP Visualization",
             message="Please display side-by-side UMAPs of each clinical condition in the Sucre Lab BPD dataset, colored by the cell types that are present in each condition.",
-            icon="public/scatter-plot-svgrepo-com.svg"
+            icon="/public/scatter-plot-svgrepo-com.svg"
         ),
         cl.Starter(
             label="Gene Expression Heatmap",
             message="Show me a heatmap of AT2 cell marker gene expression in ILD.",
-            icon="public/heatmap-svgrepo-com.svg"
+            icon="/public/heatmap-svgrepo-com.svg"
         ),
         cl.Starter(
             label="Gene Regulatory Network",
             message="Please generate a gene regulatory network from the differentially expressed genes in abCAP cells from the BPD+PHT samples.",
-            icon="public/network-graph-presentation-svgrepo-com.svg"
+            icon="/public/network-graph-presentation-svgrepo-com.svg"
         ),
         cl.Starter(
             label="Marker Gene Overlap",
             message="Show me the overlap of marker genes among AT1, AT2, and AT2 proliferating as a Venn diagram.",
-            icon="public/venn-diagram-svgrepo-com.svg"
+            icon="/public/venn-diagram-svgrepo-com.svg"
         ),
         cl.Starter(
             label="Dot Plot of Marker Genes",
             message="Show me a dot plot of AT2 marker genes in AT2 cells.",
-            icon="public/bubble-chart-svgrepo-com.svg"
+            icon="/public/bubble-chart-svgrepo-com.svg"
         ),
     ]
 
