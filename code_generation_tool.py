@@ -1,3 +1,4 @@
+# code_generation_tool.py
 import os
 import json
 import re
@@ -62,7 +63,11 @@ def sanitize_path(path: str, base_dir: str = BASE_DATASET_DIR) -> str:
     """Sanitize file path to prevent traversal outside base directory."""
     try:
         # Handle URLs first
-        BASE_URL = "https://devapp.lungmap.net"
+        try:
+            BASE_URL = os.environ["BASE_URL"]
+        except KeyError:
+            raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+            
         if isinstance(path, str) and path.startswith(BASE_URL):
             logger.info(f"Path is a URL, stripping BASE_URL: {path}")
             return path[len(BASE_URL):]
@@ -86,7 +91,11 @@ def validate_file_input(file_input: Optional[str]) -> Optional[str]:
         return None
     
     # Handle URLs, especially those starting with BASE_URL
-    BASE_URL = "https://devapp.lungmap.net"
+    try:
+        BASE_URL = os.environ["BASE_URL"]
+    except KeyError:
+        raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+        
     if isinstance(file_input, str) and file_input.startswith(BASE_URL):
         logger.info(f"File input is a URL: {file_input}")
         # Extract the path part from the URL
@@ -481,33 +490,32 @@ class FinalOutputModel(BaseModel):
 
 final_output_parser = PydanticOutputParser(pydantic_object=FinalOutputModel)
 
-FINAL_OUTPUT_PROMPT_TEMPLATE = """\
-Based on the provided raw output, generated code, and selected dataset(s), generate a final JSON output adhering to the following schema:
+FINAL_OUTPUT_PROMPT_TEMPLATE = f"""\
+Generate a structured output from the code execution results according to these guidelines:
 
-{format_instructions}
+- For the 'content' field, use the full raw output and prepend '{os.environ["BASE_URL"]}' to any file paths (e.g., paths starting with '/' or containing '.tsv', '.png', etc.) within it, preserving all other text.
+- ALWAYS PREPEND '{os.environ["BASE_URL"]}' TO THE FILE PATHS IN THE RAW OUTPUT.
+- For 'generated_code', include the code that was executed.
+- For 'error', include any error message, or null if execution was successful.
+- For 'selected_dataset', include the selected dataset name or null if none was used.
+- For 'selected_datasets', include a list of datasets if multiple were used, or null if not applicable.
+- For 'dataset_path_placeholder', include a suggested placeholder to help users reference this dataset in future queries.
+- For 'output_directory_placeholder', include a suggested placeholder for the output directory.
 
-Raw Output:
-{raw_output}
+Code output:
+{{output}}
 
-Generated Code:
-{generated_code}
+Generated code:
+{{code}}
 
-Selected Dataset(s):
-{selected_datasets}
+Error (if any):
+{{error}}
 
-Instructions:
-- For the 'content' field, use the full raw output and prepend 'https://devapp.lungmap.net' to any file paths (e.g., paths starting with '/' or containing '.tsv', '.png', etc.) within it, preserving all other text.
-**IMPORTANT**
- - ALWAYS PREPEND 'https://devapp.lungmap.net' TO THE FILE PATHS IN THE RAW OUTPUT.
- - MAKE SURE TO REPLACE THE DATASET PATHS IN THE GENERATED CODE WITH '/path_to/<dataset_name>' for each dataset used (e.g., '/path_to/BPD_Sucre_normalized_log_deg.h5ad') if a dataset is used.
- - MAKE SURE TO REPLACE THE FILE INPUT PATHS IN THE GENERATED CODE WITH '/path_to/<filename>' (e.g., '/path_to/venn_overlapping_markers_42693.tsv') if a file input is used.
- - MAKE SURE TO REPLACE THE OUTPUT DIRECTORIES IN THE GENERATED CODE WITH 'path_to_output_directory'.
-- If the raw output contains an error (e.g., 'Traceback', 'Error', 'Exception'), include it in the 'error' field and set 'content' to 'Error occurred during execution'.
-- Include the selected dataset(s) in 'selected_dataset' (for a single dataset) or 'selected_datasets' (for multiple) if datasets are used; otherwise, leave as null if only a file input is used.
-- Populate 'dataset_path_placeholder' with the dataset path used (e.g., '/path_to/BPD_Sucre_normalized_log_deg.h5ad') if a dataset is used, or the file input path (e.g., '/path_to/venn_overlapping_markers_42693.tsv') if a file input is used, or leave as null if multiple datasets are used.
-- Set 'output_directory_placeholder' to 'path_to_output_directory'.
+Selected dataset:
+{{dataset}}
 
-Output a single JSON object matching the schema.
+Output a JSON object according to this schema:
+{{format_instructions}}
 """
 
 final_output_prompt = ChatPromptTemplate.from_messages(
@@ -549,30 +557,14 @@ def create_status_json(message: str, status: str = "in_progress"):
 async def Code_Generator(user_query: str, file_input: Optional[str] = None) -> str:
     """
     Generates and executes custom Python code based on user queries, with optional file input processing.
-    
-    Parameters:
-    - user_query: A string containing the user's code generation request
-    - file_input: Optional path to a file to analyze (TSV, CSV, H5AD, PDF, PNG, etc.)
-      * Can be a URL starting with https://devapp.lungmap.net/ (will be automatically converted to a local path)
-      * Can be a local path to a file
-      * Particularly useful for analyzing TSV files generated by the visualization_tool
-    
-    Returns:
-    - A JSON string containing:
-      - content: Human-readable output of the code execution
-      - code: The generated Python code
-      - datasets: Datasets used in the analysis
-      - error: Any error messages (if applicable)
-      
-    Notes:
-    - When passed a file_input, the function will analyze its contents based on the user_query
-    - TSV files from visualization_tool often contain network data, gene lists, or statistical results
-      that can be further analyzed with custom code
-    - The function will automatically strip the BASE_URL from file inputs to access the local file
     """
     logger.info("Top-level orchestrator started for user query:\n%s, file_input: %s", user_query, file_input)
     try:
-        BASE_URL = "https://devapp.lungmap.net"
+        try:
+            BASE_URL = os.environ["BASE_URL"]
+        except KeyError:
+            raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+            
         stripped_file_input = None
         if file_input:
             try:
@@ -672,3 +664,42 @@ async def Code_Generator(user_query: str, file_input: Optional[str] = None) -> s
 
 # For backward compatibility
 code_generation_tool = Code_Generator
+
+def explain_file_input():
+    """Generate a document explaining how to use file input in code generation."""
+    with open(os.path.join(os.path.dirname(__file__), "docs", "code_generation_file_input.md"), "w") as f:
+        f.write(f"""# Using File Input with Code Generation
+
+The Code Generator tool can analyze and process input files in several ways:
+
+## File Input Types
+* **File Upload**: Upload a local file directly through the chat interface for analysis.
+* **File Path**: Provide a full path to a file on the server (must be within allowed directories).
+* **URL**: Provide a URL to access a file (e.g., from previous plot generations).
+* Can be a URL starting with {os.environ["BASE_URL"]}/ (will be automatically converted to a local path)
+
+## Supported File Types
+Currently supported file types include:
+* TSV (.tsv) 
+* CSV (.csv) 
+* H5AD (.h5ad)
+
+## Example Queries with File Input
+* "Load this TSV file and count the number of rows"
+* "Create a bar plot showing the distribution of values in column 'X' from this CSV"
+* "Find the top 10 genes by expression in clusters from this h5ad file"
+
+## Capabilities
+The Code Generator can:
+* Read and parse tabular data (TSV/CSV)
+* Extract metadata from annotations
+* Filter and transform data
+* Generate statistical analyses
+* Create custom visualizations
+
+## Implementation Notes
+* The tool automatically handles file path resolution and URL conversion
+* Files are read using appropriate libraries (pandas for CSV/TSV, scanpy for h5ad)
+* Error handling includes checking for file existence and valid file types
+""")
+    return "File input documentation generated."
