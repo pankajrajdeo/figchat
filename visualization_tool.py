@@ -22,7 +22,11 @@ from figure_generation import main
 import pandas as pd
 from langchain.schema import SystemMessage, HumanMessage
 
-BASE_URL = "https://devapp.lungmap.net"
+# Get BASE_URL from environment with better error handling
+try:
+    BASE_URL = os.environ["BASE_URL"]
+except KeyError:
+    raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
 
 # Define training data file path in standardized location
 BASE_DATASET_DIR = os.environ.get("BASE_DATASET_DIR", "")
