@@ -978,22 +978,30 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     - covariate_index: The primary index (e.g., disease conditions).
     - alt_covariate_index: The optional alternative index for coloring (e.g., assay type).
     """
-    global root
+    global root, adata, restrict_studies, study_index, cell_type_index
     description = "Violin plot for a single gene in a single-cell type across conditions with possible confounding variables (optional)"
     covars = [cov for cov in covariates if cov is not None]  # Remove None values
 
     # Subset the data based on cell type and covariates
     adata_subset = adata[adata.obs[cell_type_index].isin([cell_type]) & adata.obs[covariate_index].isin(covars)].copy()
 
+    # Apply study restrictions if specified - this should already be applied in the main function
+    # to the global adata, but we'll check again to be safe
+    if restrict_studies is not None and study_index is not None:
+        if study_index in adata_subset.obs:
+            adata_subset = adata_subset[adata_subset.obs[study_index].isin(restrict_studies)].copy()
+
     if adata_subset.shape[0] == 0:
-        return
+        print(f"No cells found for cell type '{cell_type}' and covariates {covars}. Check cell_type_index: {cell_type_index} and study restrictions.")
+        return plots
 
     # Ensure proper ordering for the main covariate
     adata_subset.obs[covariate_index] = pd.Categorical(adata_subset.obs[covariate_index], categories=covars, ordered=True)
 
     # Extract expression data for the gene
     if gene_symbol not in adata_subset.var_names:
-        return
+        print(f"Gene '{gene_symbol}' not found in the dataset")
+        return plots
 
     gene_expression = adata_subset[:, gene_symbol].X.toarray().flatten()
 
@@ -1010,7 +1018,8 @@ def plot_gene_violin(gene_symbol, cell_type, covariates, covariate_index, alt_co
     # Overlay scatter plot for individual data points, colored by alt_covariate_index if provided
     if alt_covariate_index:
         if alt_covariate_index not in adata_subset.obs:
-            return
+            print(f"Alternative covariate index '{alt_covariate_index}' not found in the dataset")
+            return plots
 
         # Map alternative covariates to unique colors
         unique_alt_covariates = adata_subset.obs[alt_covariate_index].astype(str).unique()
