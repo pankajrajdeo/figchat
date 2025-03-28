@@ -15,7 +15,11 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
 # Base URL for file paths
-BASE_URL = "https://devapp.lungmap.net"
+try:
+    BASE_URL = os.environ["BASE_URL"]
+except KeyError:
+    raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+
 PLOT_OUTPUT_DIR = os.getenv('PLOT_OUTPUT_DIR')
 
 # Print warning if PLOT_OUTPUT_DIR is not set
