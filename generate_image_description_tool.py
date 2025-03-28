@@ -11,7 +11,11 @@ from langchain_core.messages import HumanMessage
 # Load environment variables
 load_dotenv()
 
-BASE_URL = "https://devapp.lungmap.net"  # <-- BASE URL for public image paths
+try:
+    BASE_URL = os.environ["BASE_URL"]  # <-- BASE URL for public image paths
+except KeyError:
+    raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 if not GOOGLE_API_KEY:
