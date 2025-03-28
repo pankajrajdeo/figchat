@@ -12,7 +12,11 @@ from langchain_core.messages import HumanMessage
 # Load environment variables
 load_dotenv()
 
-BASE_URL = "https://devapp.lungmap.net"  # Define BASE_URL for public file paths
+try:
+    BASE_URL = os.environ["BASE_URL"]  # Define BASE_URL for public file paths
+except KeyError:
+    raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+
 BASE_DATASET_DIR = os.getenv('BASE_DATASET_DIR')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 PLOT_OUTPUT_DIR = os.getenv('PLOT_OUTPUT_DIR')
