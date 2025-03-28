@@ -23,7 +23,10 @@ DATASET_INDEX_FILE = os.getenv("DATASET_INDEX_FILE")
 DATABASE_URL = os.getenv("DATABASE_URL")
 TRAIN_DATA_FILE = os.getenv("TRAIN_DATA_FILE")
 TRAIN_IMAGE_DATA_FILE = os.getenv("TRAIN_IMAGE_DATA_FILE")
-BASE_URL = os.getenv("BASE_URL")
+try:
+    BASE_URL = os.environ["BASE_URL"]
+except KeyError:
+    raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
 
 # PostgreSQL connection configuration
 connection_kwargs = {
