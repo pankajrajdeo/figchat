@@ -657,40 +657,14 @@ class ViolinPlotConfig(BaseModel):
         ...,
         description="Mandatory list of all the grouping fields for aggregation/visualization derived from the 'Display Index' field of the dataset metadata."
     )
-    # restrict_studies: Optional[List[str]] = Field(
-    #     default=None,
-    #     description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
-    # )
-    # study_index: Optional[str] = Field(
-    #     default=None,
-    #     description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
-    # )
-    """"
-    restrict_variable2: Optional[List[str]] = Field(
+    restrict_studies: Optional[List[str]] = Field(
         default=None,
-        description="Optional list of values to restrict on variable2."
+        description="For the HLCA dataset, if the user has not specified the study or studies to restrict to, set default to 'restrict_studies' = 'Sun_2020' and ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
-    variable2_index: Optional[str] = Field(
+    study_index: Optional[str] = Field(
         default=None,
-        description="Metadata column name corresponding to restrict_variable2."
+        description="For the HLCA dataset, if the user has not specified the study or studies, ensure 'study_index' = 'study'. For any other dataset, this field should be set to `None`."
     )
-    restrict_variable3: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable3."
-    )
-    variable3_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable3."
-    )
-    restrict_variable4: Optional[List[str]] = Field(
-        default=None,
-        description="Optional list of values to restrict on variable4."
-    )
-    variable4_index: Optional[str] = Field(
-        default=None,
-        description="Metadata column name corresponding to restrict_variable4."
-    )
-    """
 
 class VennPlotConfig(BasePlotConfig):
     """
@@ -957,7 +931,13 @@ PLOT_GUIDES = {
         "  - display_variables: A mandatory list of all the grouping fields for aggregation or visualization. This is dynamically derived\n"
         "                       from the dataset's metadata and must be explicitly provided.\n"
         "Optional fields:\n"
-        "  - The first variable in the list **must** be covariate_index. The second variable, if provided, is used for alternative grouping or coloring.)\n"
+        "  - The first variable in the list **must** be covariate_index. The second variable, if provided, is used for alternative grouping or coloring.\n"
+        "  - restrict_studies: A list of study names or IDs to filter the dataset before plotting. By default, for datasets like HLCA, "
+        "                      restricts to 'Sun_2020' unless a disease is specified. If a disease is specified, the most relevant study "
+        "                      for the disease will be automatically chosen unless otherwise specified by the user. For datasets other than HLCA, "
+        "                      this field should be set to `null`.\n"
+        "  - study_index: Column name in the dataset's metadata corresponding to 'restrict_studies'. Default for HLCA datasets is 'study'. "
+        "                 For datasets other than HLCA, this field should be set to `null`.\n"
     ),
     "venn": (
         "Venn or 'all' plot:\n"
