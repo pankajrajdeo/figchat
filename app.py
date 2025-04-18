@@ -30,59 +30,6 @@ logging_level = os.getenv('LOGGING_LEVEL', 'INFO').upper()
 numeric_level = getattr(logging, logging_level, None)
 logger.setLevel(numeric_level)
 
-# --------------------------
-# SFT Training Data Collection
-# --------------------------
-# Path for storing SFT training data
-SFT_TRAINING_DATA_FILE = os.path.join(os.environ.get("BASE_DATASET_DIR", ""), "training_data", "sft_training_data.json")
-
-# Initialize a lock for thread-safe file operations
-log_lock = threading.Lock()
-
-def load_sft_log() -> dict:
-    """
-    Load the existing SFT training log from SFT_TRAINING_DATA_FILE.
-    If the file doesn't exist, initialize with an empty structure.
-    """
-    os.makedirs(os.path.dirname(SFT_TRAINING_DATA_FILE), exist_ok=True)
-    if not os.path.exists(SFT_TRAINING_DATA_FILE):
-        return {"interactions": []}
-
-    try:
-        with open(SFT_TRAINING_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        # If the file is corrupted, reset it
-        return {"interactions": []}
-
-def append_sft_log(
-    user_message: str, 
-    assistant_response: str, 
-    tool_calls: List[Dict], 
-    interaction_type: str
-) -> None:
-    """
-    Append a new SFT training entry to the log file.
-    
-    Parameters:
-    - user_message: The user query/message
-    - assistant_response: The final response from the assistant
-    - tool_calls: List of tool calls made during the interaction
-    - interaction_type: Type of interaction ("direct_tool_call", "explanatory_tool_call", or "direct_response")
-    """
-    with log_lock:  # Ensure thread-safe access
-        log_data = load_sft_log()
-        log_entry = {
-            "user_message": user_message,
-            "assistant_response": assistant_response,
-            "tool_calls": tool_calls,
-            "interaction_type": interaction_type,
-            "timestamp": pd.Timestamp.now().isoformat()
-        }
-        log_data["interactions"].append(log_entry)
-        with open(SFT_TRAINING_DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(log_data, f, indent=4)
-
 # PostgreSQL connection configuration
 connection_kwargs = {
     "autocommit": True,
@@ -233,11 +180,11 @@ You can generate the following plot types:
 - UpSet Plots
 
 ### Tools Available:
-- **visualization_tool**: Use this tool to generate visualizations based on the user's query. The tool will automatically select the most appropriate dataset based on the query content. You can customize the plot using observation columns (e.g., "cell_type", "disease", or other metadata fields). **Always include the plot configuration JSON with the generated plots to show the configuration used.**
+- **visualization_tool**: Use this tool to generate visualizations based on the user's query. The tool will automatically select the most appropriate dataset based on the query content. You can customize the plot using observation columns (e.g., "cell_type", "disease", or other metadata fields). **Important:** When calling this tool, you MUST pass the user's request *exactly* as provided, without summarizing or altering it. **Always include the plot configuration JSON with the generated plots to show the configuration used.**
 - **dataset_info_tool**: Use this tool to provide detailed metadata and information about the datasets. **Note:** You can either:
   - Retrieve the preloaded metadata (default route) which shows all dataset details, or
-  - Provide a TSV file path in your query to parse and display the contents of that file.
-- **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities.
+  - Provide a TSV file path in your query to parse and display the contents of that file. **Context Awareness:** If the `visualization_tool` just generated a TSV file, and the user asks to analyze data without specifying a file, assume they are referring to *that most recently generated TSV file*.
+- **internet_search_tool**: Use this tool to perform an internet search for general queries that go beyond the preloaded dataset capabilities or when specific information (e.g., gene lists, pathways) is not found in the dataset metadata.
 - **generate_image_description_tool**: Use this tool to generate a comprehensive, detailed description of an uploaded image, analyzing its textual and visual elements.
 - **code_generation_tool**: Use this tool to generate and execute custom Python code for complex analyses that are not covered by the standard visualization and dataset tools and also when the user provides a file for analysis. This tool is particularly useful for advanced users who need to perform specific data manipulations or analyses that require custom code execution.
 - **Functional_Enricher**: Use this tool to perform gene functional enrichment analysis (GFEA) using the ToppGene API. It automatically extracts gene symbols from the user's query and identifies requested enrichment categories. If no specific categories are mentioned, it uses all available categories. The tool returns enrichment results as visualizations (PNG/PDF) and data files (TSV), with paths that can be used for further analysis.
@@ -261,6 +208,14 @@ Examples of effective preambles:
 - "To generate a gene interaction network plot using the Human Lung Cell Atlas (HLCA) dataset, I will proceed with identifying relevant parameters and data features necessary for the visualization. I'll initiate the process now."
 - "To perform functional enrichment analysis on the genes FOXJ1, FOXI1, and FOXC2, I'll use the ToppGene API to identify significant biological pathways, gene ontology terms, and disease associations. Let me run that analysis for you now."
 
+**Handling Missing Metadata Information:**
+- If the `dataset_info_tool` or `visualization_tool` cannot find specific information (e.g., gene lists, pathways, or other metadata) required to fulfill the user's request, leverage your internal knowledge to provide relevant information (e.g., known gene lists for specific processes like apoptosis). If internal knowledge is insufficient or uncertain, use the `internet_search_tool` to retrieve the necessary information (e.g., a list of apoptosis-related genes) before proceeding with the visualization or analysis.
+- Clearly state when you are using internal knowledge or web search results, for example:
+  - "The dataset metadata does not contain a list of apoptosis-related genes. Based on my knowledge, apoptosis genes include BAX, BCL2, and CASP3. I'll use these genes to generate the heatmap."
+  - "The metadata lacks information on apoptosis genes. Let me search for a reliable list of apoptosis-related genes to use in the visualization."
+- After retrieving the information, proceed with the appropriate tool (e.g., `visualization_tool` for plotting or `Functional_Enricher` for enrichment analysis) using the supplemented data.
+- This fallback mechanism applies to any request where metadata is incomplete, such as missing gene lists, pathways, or other specific annotations.
+
 **Visualization Requests:**
 - Always invoke visualization_tool for requested plots (heatmaps, UMAPs, gene networks).
 - For each generated visualization, ALWAYS show ALL PNG images directly in your response using Markdown image syntax `![Description](image_url)`.
@@ -282,19 +237,19 @@ When a user asks to see the code or configuration used for previous outputs:
 
 **Tool Chaining for Data Analysis:**
 - Automatically store file paths when visualizations generate output files (TSV, JSON).
+- If the user asks for what are the genes in this plot, use dataset_info_tool to analyze the tsv file and return the gene names or use image_analyzer tool to analyze the image and also handle image related queries (e.g. what are the genes in red).
 - Pass stored file paths explicitly to subsequent tools if user asks for further analysis.
 - Example workflow patterns:
-  ```
-  # Visualization → Analysis:
-  result = visualization_tool(user_query="Generate heatmap of DEGs in AT2 cells")
-  if "file_path" in result:
-      dataset_info_tool(query="List top DEGs", file_path=result["file_path"])
-  
-  # Visualization → Custom Analysis:
-  result = visualization_tool(user_query="Gene regulatory network for fibroblasts")
-  if "file_path" in result:
-      code_generation_tool(user_query="Bar chart of top regulators", file_input=result["file_path"])
-  ```
+
+**Visualization → Analysis:**
+result = visualization_tool(user_query="Generate heatmap of DEGs in AT2 cells")
+if "file_path" in result:
+dataset_info_tool(query="List top DEGs", file_path=result["file_path"])
+
+**Visualization → Custom Analysis:**
+result = visualization_tool(user_query="Gene regulatory network for fibroblasts")
+if "file_path" in result:
+code_generation_tool(user_query="Bar chart of top regulators", file_input=result["file_path"])
 
 ### IMPORTANT:
 - **Do not hallucinate**: Never claim a plot has been generated or provide fictitious file paths unless the tool has been invoked and returned actual results. Always invoke the appropriate tool or ask for clarification.
@@ -303,25 +258,25 @@ When a user asks to see the code or configuration used for previous outputs:
 - **Mandatory Tool Invocation**: You must always call the appropriate tool before providing specific details or confirmations; fabricating outputs without tool invocation is prohibited—if uncertain, ask for clarification.
 - **Image Display**: ALWAYS display ALL PNG images inline using Markdown image syntax: `![Description](image_url)` instead of just providing download links. If multiple PNG images are generated, display ALL of them in your response.
 - **Response Formatting**: After calling a tool, always insert a clear line break before presenting the results:
-  - "Let me retrieve the dataset information now... \n\n The metadata shows..."
-  - "Let me generate the heatmap now... \n\n I have generated the heatmap..."
-  - "Let me create UMAP visualizations... \n\n Here are the UMAPs showing cell clusters: \n\n ![UMAP Visualization 1](https://example.com/plot1.png) \n\n ![UMAP Visualization 2](https://example.com/plot2.png) \n\n You can also download the PDF versions ([PDF 1](https://example.com/plot1.pdf), [PDF 2](https://example.com/plot2.pdf)) or access the raw data ([TSV 1](https://example.com/data1.tsv), [TSV 2](https://example.com/data2.tsv)) for further analysis."
+- "Let me retrieve the dataset information now... \n\n The metadata shows..."
+- "Let me generate the heatmap now... \n\n I have generated the heatmap..."
+- "Let me create UMAP visualizations... \n\n Here are the UMAPs showing cell clusters: \n\n ![UMAP Visualization 1](https://example.com/plot1.png) \n\n ![UMAP Visualization 2](https://example.com/plot2.png) \n\n You can also download the PDF versions ([PDF 1](https://example.com/plot1.pdf), [PDF 2](https://example.com/plot2.pdf)) or access the raw data ([TSV 1](https://example.com/data1.tsv), [TSV 2](https://example.com/data2.tsv)) for further analysis."
 
 ### Handling LungMAP Queries:
 - If a request is related to LungMAP.net or its resources, automatically construct the search URL as follows:
-  - https://www.lungmap.net/search/?queries[]=$String
-  - Replace $String with the user's search term and return the appropriate URL.
+- https://www.lungmap.net/search/?queries[]=$String
+- Replace $String with the user's search term and return the appropriate URL.
 
 ### Key Guidelines:
 - **Dataset Exploration**: When users ask about available datasets, cell types, or metadata, use the dataset_info_tool first. Mention the specific dataset and fields (e.g., cell types, clinical conditions) you're checking.
 
 - **Triggers for TSV and Similar File Analysis**:
-  Use **dataset_info_tool** when users ask about:
-  - Key hub regulators in gene networks from the tsv file
-  - Differentially expressed genes (DEGs) from heatmap tsv
-  - Gene regulatory networks or interactions
-  - Specific patterns in plots that generate TSV files (e.g., heatmaps, networks, volcano plots)
-  - Example triggers: "Find key regulators," "What are the top DEGs?"
+Use **dataset_info_tool** when users ask about:
+- Key hub regulators in gene networks from the tsv file
+- Differentially expressed genes (DEGs) from heatmap tsv
+- Gene regulatory networks or interactions
+- Specific patterns in plots that generate TSV files (e.g., heatmaps, networks, volcano plots)
+- Example triggers: "Find key regulators," "What are the top DEGs?"
 
 - **Visualization Requests**: Invoke the visualization_tool for requests like "generate a gene regulatory network" or "make a heatmap." Specify parameters (e.g., cell types, genes) if provided; otherwise, the tool selects the dataset. For each generated visualization, ALWAYS show ALL PNG images and include clickable links for ALL PDF files, TSV files, and other non-image outputs.
 
@@ -332,20 +287,20 @@ When a user asks to see the code or configuration used for previous outputs:
 - **Image Analysis**: For questions about patterns, trends, or features in a generated plot (e.g., "What is prominent in this image?"), use the generate_image_description_tool, mentioning you're analyzing the specific plot.
 
 - **Custom Code Generation**: Use code_generation_tool for:
-  - Explicit requests for custom TSV or data outputs (FIRST TRY DATASET_EXPLORER TOOL).
-  - Complex plots or analyses beyond visualization_tool capabilities.
-  - Analyzing TSV or similar files generated by visualization_tool. **BUT ONLY IF THE USER EXPLICITLY ASKS FOR IT. OTHERWISE, USE DATASET_EXPLORER TOOL FIRST TO READ THE TSV FILE.**
-  - Example usage for file analysis: `code_generation_tool(user_query="Create a bar chart from heatmap data", file_input=result["file_path"])`
-  - As a fallback when other tools cannot fulfill requests, explaining: "The standard tools couldn't address this directly, so I'll generate custom code to handle your request."
+- Explicit requests for custom TSV or data outputs (FIRST TRY DATASET_EXPLORER TOOL).
+- Complex plots or analyses beyond visualization_tool capabilities.
+- Analyzing TSV or similar files generated by visualization_tool. **BUT ONLY IF THE USER EXPLICITLY ASKS FOR IT. OTHERWISE, USE DATASET_EXPLORER TOOL FIRST TO READ THE TSV FILE.**
+- Example usage for file analysis: `code_generation_tool(user_query="Create a bar chart from heatmap data", file_input=result["file_path"])`
+- As a fallback when other tools cannot fulfill requests, explaining: "The standard tools couldn't address this directly, so I'll generate custom code to handle your request."
 
 - **Triggers for Showing Generated Code or Configurations**:
-  - When user explicitly asks: "Show code used," "Provide configuration details," "How was this visualization generated?"
-  - Respond directly with stored code or config without reinvoking tools.
+- When user explicitly asks: "Show code used," "Provide configuration details," "How was this visualization generated?"
+- Respond directly with stored code or config without reinvoking tools.
 
 - **Functional Enrichment Analysis**:
-  - When performing functional enrichment analysis with the Functional_Enricher tool, ALWAYS automatically use dataset_info_tool to open and display the filtered TSV file contents as a table.
-  - Do not wait for the user to request to see the filtered TSV data - display the enrichment table automatically after showing the enrichment plots.
-  - Only do this for the filtered TSV files (containing the significant enrichment results) and not for the raw/complete TSV files.
+- When performing functional enrichment analysis with the Functional_Enricher tool, ALWAYS automatically use dataset_info_tool to open and display the filtered TSV file contents as a table.
+- Do not wait for the user to request to see the filtered TSV data - display the enrichment table automatically after showing the enrichment plots.
+- Only do this for the filtered TSV files (containing the significant enrichment results) and not for the raw/complete TSV files.
 
 Always strive to understand the user's intent and provide accurate, context-appropriate responses based on the tools and datasets at your disposal. Mention specific datasets, cell types, or fields before invoking tools to build user trust and clarity.
 """)
@@ -466,11 +421,6 @@ async def on_message(message: cl.Message):
         in_suppress_streaming_tool = False
         current_suppress_tool = None
         
-        # For SFT data collection
-        streamed_before_tool = ""  # Track content streamed before first tool call
-        has_tool_call = False  # Track if any tool was called
-        collected_tool_calls = []  # Store all tool calls for SFT data
-        
         # Stream the response using astream_events for more granular control
         logger.info("Starting to stream response")
         async for event in react_graph.astream_events(
@@ -506,8 +456,6 @@ async def on_message(message: cl.Message):
                     if content:
                         await ui_message.stream_token(content)
                         logger.debug(f"Streamed token: {content[:20]}...")
-                        if not has_tool_call and content:
-                            streamed_before_tool += content
             
             elif event["event"] == "on_tool_start":
                 tool_name = event["name"]
@@ -545,7 +493,6 @@ async def on_message(message: cl.Message):
                     indent = "  " * depth
                     logger.info(f"{indent}{seq}")
                 
-                has_tool_call = True
                 current_tool_outputs[tool_name] = ""
                 current_tool_inputs[tool_name] = tool_input_str
 
@@ -570,13 +517,6 @@ async def on_message(message: cl.Message):
                         logger.info(f"{indent}{seq}")
                     
                     logger.debug(f"Tool output for {tool_name}: {tool_output[:100]}...")
-                    
-                    collected_tool_calls.append({
-                        "tool_name": tool_name,
-                        "tool_input": current_tool_inputs.get(tool_name, ""),
-                        "tool_output": tool_output,
-                        "preamble": streamed_before_tool if streamed_before_tool else ""
-                    })
                     
                     # Extract tsv_path from Data_Visualizer output and store it in the session
                     if tool_name == "Data_Visualizer":
@@ -653,21 +593,6 @@ async def on_message(message: cl.Message):
         chat_history.append({"role": "assistant", "content": final_content})
         cl.user_session.set("chat_history", chat_history)
         logger.debug(f"Updated chat history with AI response. Total messages: {len(chat_history)}")
-        
-        interaction_type = "direct_response"
-        if has_tool_call:
-            if streamed_before_tool and streamed_before_tool.strip():
-                interaction_type = "explanatory_tool_call"
-            else:
-                interaction_type = "direct_tool_call"
-        
-        append_sft_log(
-            user_message=message.content,
-            assistant_response=final_content,
-            tool_calls=collected_tool_calls,
-            interaction_type=interaction_type
-        )
-        logger.info(f"Collected SFT training data with interaction type: {interaction_type}")
         
     except Exception as e:
         logger.error(f"Error in message handling: {str(e)}")
