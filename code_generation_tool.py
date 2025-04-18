@@ -54,68 +54,47 @@ llm_advanced = ChatOpenAI(
 # ----------------------------
 python_repl_instance = PythonREPL()
 
-# Define training data file path
-TRAIN_CODE_DATA_FILE = os.path.join(BASE_DATASET_DIR, "training_data", "code_generation_training_data.json")
 log_lock = threading.Lock()
 
 # Security: Path Sanitization
 def sanitize_path(path: str, base_dir: str = BASE_DATASET_DIR) -> str:
-    """Sanitize file path to prevent traversal outside base directory."""
+    """Sanitize and validate a file path."""
     try:
-        # Handle URLs first
-        try:
-            BASE_URL = os.environ["BASE_URL"]
-        except KeyError:
-            raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
-            
-        if isinstance(path, str) and path.startswith(BASE_URL):
-            logger.info(f"Path is a URL, stripping BASE_URL: {path}")
-            return path[len(BASE_URL):]
+        # Convert to absolute path if relative
+        if not os.path.isabs(path):
+            path = os.path.join(base_dir, path)
         
-        # Handle local paths
-        resolved_path = Path(path).resolve()
-        base_path = Path(base_dir).resolve()
-        if not resolved_path.is_relative_to(base_path):
-            logger.error(f"Path traversal attempt detected: {path}")
-            raise ValueError(f"Path outside allowed directory: {path}")
-        return str(resolved_path)
+        # Normalize the path
+        path = os.path.normpath(path)
+        
+        # Ensure the path is within the base directory
+        if not path.startswith(base_dir):
+            raise ValueError(f"Path {path} is outside the base directory {base_dir}")
+        
+        return path
     except Exception as e:
-        logger.error(f"Path sanitization failed: {str(e)}")
-        raise ValueError(f"Invalid path: {path}")
+        logger.error(f"Error sanitizing path {path}: {e}")
+        raise
 
-# Security: File Input Validation
 def validate_file_input(file_input: Optional[str]) -> Optional[str]:
-    """Validate file input for existence and supported types."""
+    """Validate and sanitize file input path."""
     if not file_input:
-        logger.info("No file_input provided")
         return None
     
-    # Handle URLs, especially those starting with BASE_URL
     try:
-        BASE_URL = os.environ["BASE_URL"]
-    except KeyError:
-        raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
+        # Basic validation
+        if not isinstance(file_input, str):
+            raise ValueError(f"file_input must be a string, got {type(file_input)}")
         
-    if isinstance(file_input, str) and file_input.startswith(BASE_URL):
-        logger.info(f"File input is a URL: {file_input}")
-        # Extract the path part from the URL
-        relative_path = file_input[len(BASE_URL):]
-        # Check if it has a supported extension
-        if any(relative_path.endswith(ext) for ext in ('.tsv', '.csv', '.h5ad')):
-            logger.info(f"URL has supported file extension: {relative_path}")
-            return file_input
-        else:
-            logger.warning(f"URL has unsupported file type: {file_input}")
-            return None
-    
-    # Handle local file paths
-    if not os.path.exists(file_input):
-        logger.warning(f"File does not exist: {file_input}")
-        return None
-    if not file_input.endswith(('.tsv', '.csv', '.h5ad')):
-        logger.warning(f"Unsupported file type: {file_input}")
-        return None
-    return file_input
+        # Remove any BASE_URL prefix if present
+        if file_input.startswith("BASE_URL/"):
+            file_input = file_input[9:]  # Remove "BASE_URL/" prefix
+        
+        # Sanitize the path
+        return sanitize_path(file_input)
+    except Exception as e:
+        logger.error(f"Error validating file input {file_input}: {e}")
+        raise
 
 def load_code_log() -> dict:
     """Load the existing log from TRAIN_CODE_DATA_FILE."""
@@ -346,17 +325,6 @@ Output ONLY the corrected Python code.
     repaired_code = filter_unsafe_code(repaired_code)
     logger.info("Repaired code:\n%s", repaired_code)
     new_output = python_repl_instance.run(repaired_code)
-    log_entry = {
-        "workflow": "Code Repair",
-        "original_code": original_code,
-        "error_message": error_message,
-        "repaired_code": repaired_code,
-        "output": new_output,
-        "dataset_metadata": dataset_metadata,
-        "file_input": file_input,
-        "timestamp": pd.Timestamp.now().isoformat()
-    }
-    append_code_log(log_entry)
     return new_output, repaired_code
 
 def generate_code_and_execute(user_query: str, dataset_name: Optional[str] = None, file_input: Optional[str] = None, dataset_metadata: Optional[str] = None) -> tuple[str, Optional[str], Optional[str]]:
@@ -450,20 +418,6 @@ def generate_code_and_execute(user_query: str, dataset_name: Optional[str] = Non
                     successful_code = None
                     failed_code = generated_code
         
-        log_entry = {
-            "workflow": "Code Generation and Execution",
-            "user_query": user_query,
-            "dataset_name": dataset_name,
-            "file_input": file_input,
-            "dataset_metadata": dataset_metadata,
-            "generated_code": generated_code,
-            "output": output,
-            "successful_code": successful_code,
-            "failed_code": failed_code if not successful_code else None,
-            "timestamp": pd.Timestamp.now().isoformat()
-        }
-        append_code_log(log_entry)
-
         if any(m in output for m in error_markers):
             logger.error("Repaired code also failed: %s", output)
             failed_code = successful_code
