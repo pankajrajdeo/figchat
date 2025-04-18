@@ -28,12 +28,8 @@ try:
 except KeyError:
     raise ValueError("BASE_URL environment variable is not set. Please set it in your .env file.")
 
-# Define training data file path in standardized location
-BASE_DATASET_DIR = os.environ.get("BASE_DATASET_DIR", "")
-TRAIN_DATA_FILE = os.path.join(BASE_DATASET_DIR, "training_data", "visualization_tool_training_data.json")
-
 # -----------------------------
-# LLM
+# LLM Models
 # -----------------------------
 visualization_tool_llm_base = ChatOpenAI(model="gpt-4o-mini-2024-07-18")
 visualization_tool_llm_advanced = ChatOpenAI(model="gpt-4o")
@@ -43,52 +39,6 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
 # Set a default font family to avoid Arial warnings
 rcParams['font.family'] = 'DejaVu Sans'
-
-# -----------------------------
-# Logging Utility
-# -----------------------------
-
-# Initialize a lock for thread-safe file operations
-log_lock = threading.Lock()
-
-def load_log() -> dict:
-    """
-    Load the existing log from the TRAIN_DATA_FILE.
-    If the file doesn't exist, initialize with an empty structure.
-    """
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(TRAIN_DATA_FILE), exist_ok=True)
-    
-    if not os.path.exists(TRAIN_DATA_FILE):
-        return {"workflows": []}
-
-    try:
-        with open(TRAIN_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        # If the file is corrupted, reset it
-        return {"workflows": []}
-
-def append_log(workflow_name: str, prompt: str, response: str) -> None:
-    """
-    Append a new log entry to the TRAIN_DATA_FILE.
-    
-    Parameters:
-    - workflow_name: Name of the workflow (e.g., 'Workflow1').
-    - prompt: The prompt sent to the LLM.
-    - response: The response received from the LLM.
-    """
-    with log_lock:  # Ensure thread-safe access
-        log_data = load_log()
-        log_entry = {
-            "workflow": workflow_name,
-            "prompt": prompt,
-            "response": response,
-            "timestamp": pd.Timestamp.now().isoformat()
-        }
-        log_data["workflows"].append(log_entry)
-        with open(TRAIN_DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(log_data, f, indent=4)
 
 # -----------------------------
 # Workflow 1: Dataset & Plot Selection
@@ -111,7 +61,7 @@ class Workflow1Model(BaseModel):
 workflow1_parser = PydanticOutputParser(pydantic_object=Workflow1Model)
 
 WORKFLOW1_PROMPT_TEMPLATE = """\
-Based on the user's query and the available dataset metadata, perform the following tasks:
+DEEPLY ANALYZE THE USER QUERY AND BASED ON THE AVAILABLE DATASET METADATA (LOOK AT THE DATASET METADATA OF EACH DATASET VERY CAREFULLY AND DEEPLY), PERFORM THE FOLLOWING TASKS:
 
 1. **Dataset Selection:**
    - Select the most relevant dataset from the available options.
@@ -215,13 +165,6 @@ async def run_workflow1(user_query: str) -> Workflow1Model:
     # Invoke the chain asynchronously and get the response
     result = await chain.ainvoke(prompt_input)
     
-    # Log the interaction
-    append_log(
-        workflow_name="Workflow1",
-        prompt=formatted_prompt,
-        response=result.model_dump_json()
-    )
-    
     return result
 
 # -----------------------------
@@ -303,13 +246,6 @@ async def run_workflow2(user_query: str, selected_dataset: str, dataset_metadata
         else:
             result.suggestion = "No DEG information available for the selected dataset."
     
-    # Log the interaction
-    append_log(
-        workflow_name="Workflow2",
-        prompt=formatted_prompt,
-        response=result.model_dump_json()
-    )
-    
     return result
 
 specified_plots = {"volcano", "heatmap", "dotplot", "network", "stats"}  # Plot types that require DEG check
@@ -349,6 +285,7 @@ THIRD_PROMPT_TEMPLATE = """\
 You are a plot configuration assistant. The user wants to create a "{plot_type}". 
 Your role is to generate a valid JSON configuration for the selected plot type by accurately interpreting the dataset metadata and correcting any errors in the user query.
 
+DEEPLY ANALYZE THE USER QUERY AND THE DATASET METADATA TO DETERMINE THE CORRECT PLOT CONFIGURATION.
 Dataset Name: {dataset_name}
 
 Here is a description of how this plot type works and what arguments it needs:
@@ -393,6 +330,8 @@ User Query:
 
 #### JSON Configuration Schema (for reference):
 {format_instructions}
+
+**IMPORTANT:** Your final output must be ONLY the JSON object, with no surrounding text, explanations, or markdown formatting.
 """
 
 def get_plot_class(plot_type: str):
@@ -537,13 +476,6 @@ async def plot_config_generator(dataset_name: str, plot_type: str, user_query: s
 
     # Convert the resulting Pydantic model to valid JSON
     final_json = result_config.model_dump_json(indent=4)
-    
-    # Log the interaction
-    append_log(
-        workflow_name="Workflow3",
-        prompt=prompt_text,
-        response=final_json
-    )
     
     return final_json
 
