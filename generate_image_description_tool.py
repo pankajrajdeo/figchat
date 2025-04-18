@@ -21,52 +21,6 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable is not set. Please set it in your .env file.")
 
-# Define training data file path in standardized location
-BASE_DATASET_DIR = os.environ.get("BASE_DATASET_DIR", "")
-TRAIN_IMAGE_DATA_FILE = os.path.join(BASE_DATASET_DIR, "training_data", "image_descriptions_training_data.json")
-
-# Initialize a lock for thread-safe file operations
-log_lock = threading.Lock()
-
-def load_image_log() -> dict:
-    """
-    Load the existing log from TRAIN_IMAGE_DATA_FILE.
-    If the file doesn't exist, initialize with an empty structure.
-    """
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(TRAIN_IMAGE_DATA_FILE), exist_ok=True)
-    
-    if not os.path.exists(TRAIN_IMAGE_DATA_FILE):
-        return {"image_descriptions": []}
-
-    try:
-        with open(TRAIN_IMAGE_DATA_FILE, "r", encoding="utf-8", errors="replace") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        # If the file is corrupted, reset it
-        return {"image_descriptions": []}
-
-def append_image_log(image_path: str, query: str, description: str) -> None:
-    """
-    Append a new image description entry to the TRAIN_IMAGE_DATA_FILE.
-    
-    Parameters:
-    - image_path: Path to the image.
-    - query: The user-provided query.
-    - description: The AI-generated image description.
-    """
-    with log_lock:  # Ensure thread-safe access
-        log_data = load_image_log()
-        log_entry = {
-            "image_path": image_path,
-            "query": query,
-            "description": description,
-            "timestamp": pd.Timestamp.now().isoformat()
-        }
-        log_data["image_descriptions"].append(log_entry)
-        with open(TRAIN_IMAGE_DATA_FILE, "w") as f:
-            json.dump(log_data, f, indent=4)
-
 def Image_Analyzer(image_path: str, query: str) -> dict:
     """
     Generates a detailed description of a given image based on a user-provided query and logs the result.
@@ -115,9 +69,6 @@ IMPORTANT INSTRUCTIONS:
     # If description is empty or invalid, do not log it
     if not description:
         return {"error": "Failed to generate image description.", "image_path": relative_path, "query": query}
-
-    # Append to log file
-    append_image_log(relative_path, query, description)
 
     # Return structured response
     return {
