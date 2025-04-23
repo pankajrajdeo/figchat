@@ -70,3 +70,7 @@ langchain-google-genai
 
 # Database
 langgraph.checkpoint.postgres
+
+# groq
+groq
+soundfile
