@@ -33,16 +33,3 @@ async def web_search(query: str, num_results: int = 5) -> list[dict]:
 
 # Alias for backward compatibility
 internet_search_tool = web_search
-
-# Demo: runs only if executed directly
-if __name__ == "__main__":
-    async def main():
-        query = "Latest trends in AI 2025"
-        results = await web_search(query)
-        print(f"\nTop {len(results)} results for: \"{query}\"\n")
-        for i, item in enumerate(results, 1):
-            print(f"{i}. {item.get('title')}")
-            print(f"   {item.get('snippet')}")
-            print(f"   {item.get('link')}\n")
-
-    asyncio.run(main())
