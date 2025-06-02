@@ -1,42 +1,48 @@
 import os
 import json
-from langchain_tavily import TavilySearch
+import ast
+import asyncio
+from langchain_community.utilities import GoogleSerperAPIWrapper
 
-# Ensure the Tavily API key is set in environment variables
-if not os.environ.get("TAVILY_API_KEY"):
-    raise EnvironmentError("TAVILY_API_KEY environment variable not set")
+# 1. Ensure the Serper API key is set
+if not os.getenv("SERPER_API_KEY"):
+    raise EnvironmentError("SERPER_API_KEY environment variable not set")
 
-# Initialize the Tavily Search tool
-tavily_tool_instance = TavilySearch(
-    max_results=5,
-    topic="general"
-)
+# 2. Initialize Serper wrapper, fetching up to 5 results
+serper = GoogleSerperAPIWrapper(k=5, type="search")
 
-async def Web_Search(query: str, num_results: int = 5) -> list:
+async def web_search(query: str, num_results: int = 5) -> list[dict]:
     """
-    Performs an internet search using Tavily and retrieves detailed results in JSON format asynchronously.
-
-    Parameters:
-        query (str): The search query to perform.
-        num_results (int): The number of results to fetch (default is 5).
-
-    Returns:
-        list: A list of dictionaries containing detailed search results including title, content snippet, and URL.
+    Return up to *num_results* Google results for *query* via Serper.dev.
+    Each result dict contains at least: title, snippet, link.
     """
-    try:
-        # Invoke Tavily asynchronously with query
-        search_results = await tavily_tool_instance.ainvoke({"query": query})
+    loop = asyncio.get_running_loop()
+    raw = await loop.run_in_executor(None, serper.results, query)
 
-        # If the results are returned as JSON string, parse it
-        if isinstance(search_results, str):
-            search_results = json.loads(search_results)
+    # If Serper returned a string, parse it into a dict
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = ast.literal_eval(raw)
 
-        # Extract the 'results' field which contains the actual search entries
-        detailed_results = search_results.get("results", [])[:num_results]
-        return detailed_results
+    if not isinstance(raw, dict):
+        raise TypeError(f"Serper returned unexpected type: {type(raw)}")
 
-    except Exception as e:
-        raise RuntimeError(f"Error performing Tavily search: {repr(e)}")
+    return (raw.get("organic") or raw.get("results") or [])[:num_results]
 
-# For backward compatibility
-internet_search_tool = Web_Search
+# Alias for backward compatibility
+internet_search_tool = web_search
+
+# Demo: runs only if executed directly
+if __name__ == "__main__":
+    async def main():
+        query = "Latest trends in AI 2025"
+        results = await web_search(query)
+        print(f"\nTop {len(results)} results for: \"{query}\"\n")
+        for i, item in enumerate(results, 1):
+            print(f"{i}. {item.get('title')}")
+            print(f"   {item.get('snippet')}")
+            print(f"   {item.get('link')}\n")
+
+    asyncio.run(main())
